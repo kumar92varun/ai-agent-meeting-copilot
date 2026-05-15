@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+.output/
+.nuxt/
+dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PM2
+.pm2/
+
+# drizzle migrations (keep schema, ignore generated sql if preferred)
+# Uncomment if you want to ignore generated migrations:
+# server/db/migrations/*.sql
+
+# TypeScript
+*.tsbuildinfo

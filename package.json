@@ -1,0 +1,79 @@
+{
+  "name": "crownstack-standup-intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "worker": "tsx watch server/worker.ts",
+    "worker:dev": "tsx watch server/worker.ts",
+    "worker:prod": "tsx server/worker.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "tsx scripts/seed.ts",
+    "inspect-llm-log": "tsx scripts/inspect-llm-log.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "nuxt typecheck"
+  },
+  "dependencies": {
+    "@langchain/anthropic": "^0.3.21",
+    "@langchain/community": "^0.3.38",
+    "@langchain/core": "^0.3.58",
+    "@langchain/google-genai": "^0.1.12",
+    "@langchain/langgraph": "^0.2.74",
+    "@langchain/openai": "^0.4.4",
+    "@nuxt/ui": "^2.21.0",
+    "@sendgrid/mail": "^8.1.4",
+    "@sentry/node": "^8.55.0",
+    "@sentry/vue": "^8.55.0",
+    "bullmq": "^5.46.0",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "drizzle-orm": "^0.40.1",
+    "drizzle-zod": "^0.7.0",
+    "ioredis": "^5.4.2",
+    "jaro-winkler": "^0.2.8",
+    "langchain": "^0.3.22",
+    "nuxt": "^3.15.4",
+    "nuxt-auth-utils": "^0.5.18",
+    "pg": "^8.14.1",
+    "pgvector": "^0.2.0",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@nuxt/eslint-config": "^0.7.5",
+    "@types/node": "^22.13.13",
+    "@types/pg": "^8.11.11",
+    "dotenv": "^17.4.2",
+    "drizzle-kit": "^0.30.5",
+    "eslint": "^9.22.0",
+    "prettier": "^3.5.3",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@11.1.2",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@parcel/watcher",
+      "esbuild",
+      "msgpackr-extract",
+      "protobufjs",
+      "unrs-resolver"
+    ]
+  }
+}
