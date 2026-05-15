@@ -29,5 +29,5 @@ For each deadline phrase, output:
   "reasoning": "one sentence"
 }
 
-Return ONLY valid JSON array, no markdown.`
+Return results in the items array of the structured output schema.`
 }

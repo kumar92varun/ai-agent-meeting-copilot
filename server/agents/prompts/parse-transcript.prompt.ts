@@ -36,7 +36,7 @@ INPUT LANGUAGE:
 EXAMPLES of Hinglish in transcripts:
 ${examples}
 
-OUTPUT: Return a JSON array of speaker segments. Each segment:
+OUTPUT: For each speaker segment, produce one item with these fields:
 {
   "speakerLabel": "original label from transcript",
   "matchedResourceId": "uuid or null",
@@ -45,5 +45,5 @@ OUTPUT: Return a JSON array of speaker segments. Each segment:
   "text": "the speaker's verbatim transcript text"
 }
 
-Return ONLY valid JSON array, no markdown.`
+Return results in the items array of the structured output schema.`
 }

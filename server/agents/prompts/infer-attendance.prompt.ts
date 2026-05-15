@@ -28,5 +28,5 @@ For each team member, output:
   "note": "brief note if applicable e.g. 'on leave mentioned by team lead'"
 }
 
-Return ONLY valid JSON array, no markdown.`
+Return results in the items array of the structured output schema.`
 }

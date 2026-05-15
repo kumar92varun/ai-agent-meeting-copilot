@@ -45,5 +45,5 @@ For each task item output:
   "rawQuote": "exact original Hinglish text from transcript"
 }
 
-Return ONLY valid JSON array, no markdown.`
+Return results in the items array of the structured output schema.`
 }

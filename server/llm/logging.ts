@@ -1,4 +1,6 @@
-import type { BaseLanguageModel } from '@langchain/core/language_models/base'
+import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
+import type { BaseMessage } from '@langchain/core/messages'
+import { z } from 'zod'
 import { getDb } from '../db/client'
 import { llmCallLogs } from '../db/schema'
 import { logger } from '../utils/logger'
@@ -10,36 +12,44 @@ export interface LlmCallOptions {
   provider: string
 }
 
-export async function logLlmCall<T>(
-  options: LlmCallOptions,
-  fn: () => Promise<T & { tokensIn?: number; tokensOut?: number }>
-): Promise<T> {
+/**
+ * Calls the model with structured output and logs token usage + timing to the DB.
+ * Wraps `itemSchema` in `z.object({ items: [...] })` because OpenAI and Anthropic
+ * require object (not top-level array) schemas in their structured output APIs.
+ */
+export async function invokeStructured<TOut extends Record<string, unknown>, TIn = TOut>(
+  model: BaseChatModel,
+  itemSchema: z.ZodType<TOut, z.ZodTypeDef, TIn>,
+  messages: BaseMessage[],
+  options: LlmCallOptions
+): Promise<TOut[]> {
+  const wrappedSchema = z.object({ items: z.array(itemSchema as unknown as z.ZodType<TOut>) })
+  const chain = model.withStructuredOutput(wrappedSchema, { includeRaw: true })
+
   const start = Date.now()
-  let result: T
+  let items: TOut[]
+  let tokensIn = 0
+  let tokensOut = 0
   let error: string | undefined
 
   try {
-    result = await fn()
+    const output = await chain.invoke(messages)
+    const raw = output.raw as { usage_metadata?: { input_tokens?: number; output_tokens?: number } }
+    tokensIn = raw.usage_metadata?.input_tokens ?? 0
+    tokensOut = raw.usage_metadata?.output_tokens ?? 0
+    items = output.parsed.items as TOut[]
   } catch (err) {
     error = err instanceof Error ? err.message : String(err)
-    const durationMs = Date.now() - start
-    await writeLog(options, {}, {}, 0, 0, durationMs, error)
+    await writeLog(options, 0, 0, Date.now() - start, error)
     throw err
   }
 
-  const durationMs = Date.now() - start
-  const res = result as Record<string, unknown>
-  const tokensIn = (res.tokensIn as number) || 0
-  const tokensOut = (res.tokensOut as number) || 0
-
-  await writeLog(options, {}, res, tokensIn, tokensOut, durationMs, error)
-  return result
+  await writeLog(options, tokensIn, tokensOut, Date.now() - start)
+  return items
 }
 
 async function writeLog(
   options: LlmCallOptions,
-  prompt: Record<string, unknown>,
-  response: Record<string, unknown>,
   tokensIn: number,
   tokensOut: number,
   durationMs: number,
@@ -52,8 +62,8 @@ async function writeLog(
       standupId: options.standupId || null,
       model: options.model,
       provider: options.provider,
-      prompt,
-      response,
+      prompt: {},
+      response: {},
       tokensIn,
       tokensOut,
       durationMs,
@@ -62,34 +72,4 @@ async function writeLog(
   } catch (logErr) {
     logger.error({ err: logErr }, 'Failed to write LLM call log')
   }
-}
-
-// Convenience wrapper: wraps a LangChain model call and logs it
-export async function invokeWithLogging<T>(
-  model: BaseLanguageModel,
-  messages: unknown[],
-  options: LlmCallOptions,
-  _standupId?: string
-): Promise<T> {
-  const start = Date.now()
-  let response: unknown
-  let error: string | undefined
-
-  try {
-    response = await (model as { invoke: (m: unknown[]) => Promise<unknown> }).invoke(messages)
-  } catch (err) {
-    error = err instanceof Error ? err.message : String(err)
-    const durationMs = Date.now() - start
-    await writeLog(options, { messages }, {}, 0, 0, durationMs, error)
-    throw err
-  }
-
-  const durationMs = Date.now() - start
-  const res = response as Record<string, unknown>
-  const usageMetadata = res.usage_metadata as Record<string, number> | undefined
-  const tokensIn = usageMetadata?.input_tokens || 0
-  const tokensOut = usageMetadata?.output_tokens || 0
-
-  await writeLog(options, { messages }, { response: res }, tokensIn, tokensOut, durationMs, error)
-  return response as T
 }

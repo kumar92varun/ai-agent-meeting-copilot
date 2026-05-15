@@ -24,5 +24,5 @@ For each extracted task, output:
   "reasoning": "one sentence explaining the decision"
 }
 
-Return ONLY valid JSON array, no markdown.`
+Return results in the items array of the structured output schema.`
 }

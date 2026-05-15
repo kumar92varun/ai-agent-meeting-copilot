@@ -36,5 +36,5 @@ For each risk, output:
   "sourceRawQuote": "exact original Hinglish quote that triggered this, or null"
 }
 
-Return ONLY valid JSON array, no markdown.`
+Return results in the items array of the structured output schema.`
 }

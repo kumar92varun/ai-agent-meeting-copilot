@@ -24,5 +24,5 @@ For each task, output:
   "aiEstimateReasoning": "one to two sentence explanation"
 }
 
-Return ONLY valid JSON array, no markdown.`
+Return results in the items array of the structured output schema.`
 }
