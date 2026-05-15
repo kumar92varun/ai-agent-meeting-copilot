@@ -67,7 +67,6 @@ const healthColor = (score: number | null) => {
           <div class="flex items-start justify-between mb-3">
             <div>
               <h3 class="font-semibold text-gray-900">{{ project.name }}</h3>
-              <p class="text-xs text-gray-500">{{ project.clientName }}</p>
             </div>
             <UBadge
               v-if="project.metrics"

@@ -1,5 +1,5 @@
 import { getDb } from '../client'
-import { users } from '../schema'
+import { resources } from '../schema'
 import { eq } from 'drizzle-orm'
 
 export async function bootstrapAdmin() {
@@ -11,7 +11,7 @@ export async function bootstrapAdmin() {
   }
 
   const db = getDb()
-  const existing = await db.select().from(users).where(eq(users.email, email)).limit(1)
+  const existing = await db.select().from(resources).where(eq(resources.email, email)).limit(1)
 
   if (existing.length > 0) {
     console.log(`Admin user already exists: ${email}`)
@@ -19,7 +19,7 @@ export async function bootstrapAdmin() {
   }
 
   const [admin] = await db
-    .insert(users)
+    .insert(resources)
     .values({
       email,
       name,

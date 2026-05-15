@@ -45,7 +45,7 @@ async function refreshMetrics() {
           <span>{{ resource?.name }}</span>
         </div>
         <h1 class="text-2xl font-bold text-gray-900">{{ resource?.name }}</h1>
-        <p class="text-sm text-gray-500">{{ resource?.roleTitle }} · {{ resource?.resourceType }}</p>
+        <p class="text-sm text-gray-500">{{ resource?.resourceType }}</p>
       </div>
       <UButton icon="i-heroicons-arrow-path" color="gray" variant="outline" size="sm" :loading="refreshing" @click="refreshMetrics">
         Refresh Metrics

@@ -12,7 +12,6 @@ export const AttendanceItemSchema = z.object({
   resourceId: z.string(),
   resourceName: z.string(),
   attended: z.boolean(),
-  attendanceSource: z.enum(['ai_inferred', 'human_confirmed']).default('ai_inferred'),
   confidence: z.enum(['high', 'medium', 'low']),
   note: z.string().optional(),
 })

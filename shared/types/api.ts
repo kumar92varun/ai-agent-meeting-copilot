@@ -45,7 +45,6 @@ export interface AttendanceItem {
   resourceId: string
   resourceName: string
   attended: boolean
-  attendanceSource: 'ai_inferred' | 'human_confirmed'
   rawQuote: string | null
 }
 

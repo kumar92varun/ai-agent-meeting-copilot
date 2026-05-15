@@ -1,5 +1,5 @@
 import { pgTable, uuid, boolean, timestamp, pgEnum } from 'drizzle-orm/pg-core'
-import { users } from './users'
+import { resources } from './resources'
 
 export const notificationSeverityThresholdEnum = pgEnum('notification_severity_threshold', [
   'low',
@@ -13,7 +13,7 @@ export const notificationSettings = pgTable('notification_settings', {
   userId: uuid('user_id')
     .notNull()
     .unique()
-    .references(() => users.id, { onDelete: 'cascade' }),
+    .references(() => resources.id, { onDelete: 'cascade' }),
   dailyRiskDigestEnabled: boolean('daily_risk_digest_enabled').notNull().default(true),
   immediateRiskAlertEnabled: boolean('immediate_risk_alert_enabled').notNull().default(false),
   severityThreshold: notificationSeverityThresholdEnum('severity_threshold')

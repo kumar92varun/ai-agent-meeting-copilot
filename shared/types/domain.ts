@@ -1,26 +1,9 @@
-import type { Role } from '../constants/roles'
 import type { RiskCategory, RiskSeverity, RiskStatus } from '../constants/risk-categories'
-
-export interface User {
-  id: string
-  email: string
-  name: string
-  googleSub: string
-  role: Role
-  avatarUrl: string | null
-  lastLoginAt: string | null
-  createdAt: string
-  updatedAt: string
-}
 
 export interface Project {
   id: string
   name: string
-  clientName: string
-  description: string | null
-  status: 'active' | 'paused' | 'completed'
-  sprintCadenceDays: number
-  startedAt: string | null
+  quickTeamsLink: string | null
   createdAt: string
   updatedAt: string
   deletedAt: string | null
@@ -30,10 +13,13 @@ export interface Resource {
   id: string
   name: string
   email: string | null
-  roleTitle: string | null
+  googleSub: string
+  role: 'admin' | 'project_lead'
+  avatarUrl: string | null
+  lastLoginAt: string | null
   resourceType: 'developer' | 'designer' | 'qa' | 'devops'
-  joinedAt: string | null
   isActive: boolean
+  quickTeamsLink: string | null
   createdAt: string
   updatedAt: string
   deletedAt: string | null
@@ -44,20 +30,6 @@ export interface ProjectResource {
   projectId: string
   resourceId: string
   allocationPct: number
-  startedAt: string | null
-  endedAt: string | null
-  createdAt: string
-  updatedAt: string
-  deletedAt: string | null
-}
-
-export interface ResourceLeave {
-  id: string
-  resourceId: string
-  leaveType: 'pto' | 'sick' | 'personal' | 'training'
-  startDate: string
-  endDate: string
-  notes: string | null
   createdAt: string
   updatedAt: string
   deletedAt: string | null
@@ -84,7 +56,6 @@ export interface StandupUpdate {
   standupId: string
   resourceId: string
   attended: boolean
-  attendanceSource: 'ai_inferred' | 'human_confirmed'
   completedYesterdaySummary: string | null
   workingTodaySummary: string | null
   committedTaskIds: string[]

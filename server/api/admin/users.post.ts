@@ -1,5 +1,5 @@
 import { getDb } from '../../db/client'
-import { users, projectLeads } from '../../db/schema'
+import { resources, projectLeads } from '../../db/schema'
 import { z } from 'zod'
 
 const Schema = z.object({
@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
 
   const db = getDb()
   const [user] = await db
-    .insert(users)
+    .insert(resources)
     .values({
       email: parsed.data.email,
       name: parsed.data.name,

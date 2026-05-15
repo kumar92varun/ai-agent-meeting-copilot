@@ -2,9 +2,13 @@
 import type { Project, Task, Risk, Standup, ProjectResource } from '#shared/types/domain'
 definePageMeta({ middleware: ['role'] })
 const route = useRoute()
+const router = useRouter()
 const projectId = route.params.id as string
+const { user } = useUserSession()
+const isAdmin = computed(() => (user.value as { role?: string })?.role === 'admin')
+const toast = useToast()
 
-const { data: project } = await useFetch<Project>(`/api/projects/${projectId}`)
+const { data: project, refresh: refreshProject } = await useFetch<Project>(`/api/projects/${projectId}`)
 const { data: tasks } = await useFetch<Task[]>('/api/tasks', { query: { projectId } })
 const { data: projectRisks } = await useFetch<Risk[]>('/api/risks', { query: { projectId } })
 const { data: standups } = await useFetch<Standup[]>('/api/standups', { query: { projectId } })
@@ -14,17 +18,61 @@ const tabs = ['Overview', 'Tasks', 'Standups', 'Resources', 'Risks']
 const selectedTab = ref(0)
 
 const refreshing = ref(false)
-const toast = useToast()
-
 async function refreshMetrics() {
   refreshing.value = true
   try {
-    const { jobId } = await $fetch<{ jobId: string }>(`/api/projects/${projectId}/refresh-metrics`, { method: 'POST' })
-    toast.add({ title: 'Metrics refresh queued', icon: 'i-heroicons-check-circle', color: 'green' })
+    await $fetch<{ jobId: string }>(`/api/projects/${projectId}/refresh-metrics`, { method: 'POST' })
+    toast.add({ title: 'Metrics refresh queued', color: 'green' })
   } catch {
     toast.add({ title: 'Failed to queue refresh', color: 'red' })
   } finally {
     refreshing.value = false
+  }
+}
+
+// ── edit modal ─────────────────────────────────────────────
+const editOpen = ref(false)
+const editForm = reactive({ name: '', quickTeamsLink: '' })
+
+function openEdit() {
+  if (!project.value) return
+  Object.assign(editForm, {
+    name: project.value.name,
+    quickTeamsLink: project.value.quickTeamsLink ?? '',
+  })
+  editOpen.value = true
+}
+
+const saving = ref(false)
+async function saveEdit() {
+  saving.value = true
+  try {
+    await $fetch(`/api/projects/${projectId}`, {
+      method: 'PATCH',
+      body: { name: editForm.name, quickTeamsLink: editForm.quickTeamsLink || null },
+    })
+    toast.add({ title: 'Project updated', color: 'green' })
+    editOpen.value = false
+    await refreshProject()
+  } catch {
+    toast.add({ title: 'Failed to update project', color: 'red' })
+  } finally {
+    saving.value = false
+  }
+}
+
+// ── delete ─────────────────────────────────────────────────
+const deleting = ref(false)
+async function deleteProject() {
+  if (!confirm(`Delete "${project.value?.name}"? This cannot be undone.`)) return
+  deleting.value = true
+  try {
+    await $fetch(`/api/projects/${projectId}`, { method: 'DELETE' })
+    toast.add({ title: 'Project deleted', color: 'green' })
+    router.push('/projects')
+  } catch {
+    toast.add({ title: 'Failed to delete project', color: 'red' })
+    deleting.value = false
   }
 }
 </script>
@@ -39,24 +87,46 @@ async function refreshMetrics() {
           <span>{{ project?.name }}</span>
         </div>
         <h1 class="text-2xl font-bold text-gray-900">{{ project?.name }}</h1>
-        <p class="text-sm text-gray-500">{{ project?.clientName }}</p>
+        <a v-if="project?.quickTeamsLink" :href="project.quickTeamsLink" target="_blank" rel="noopener" class="text-sm text-blue-500 hover:underline">Teams link</a>
       </div>
       <div class="flex gap-2">
-        <UButton
-          icon="i-heroicons-arrow-path"
-          color="gray"
-          variant="outline"
-          :loading="refreshing"
-          size="sm"
-          @click="refreshMetrics"
-        >
+        <UButton icon="i-heroicons-arrow-path" color="gray" variant="outline" :loading="refreshing" size="sm" @click="refreshMetrics">
           Refresh Metrics
+        </UButton>
+        <UButton v-if="isAdmin" icon="i-heroicons-pencil-square" color="gray" variant="outline" size="sm" @click="openEdit">
+          Edit
+        </UButton>
+        <UButton v-if="isAdmin" icon="i-heroicons-trash" color="red" variant="outline" size="sm" :loading="deleting" @click="deleteProject">
+          Delete
         </UButton>
         <UButton icon="i-heroicons-plus" size="sm" :to="`/standups/new?projectId=${projectId}`">
           New Standup
         </UButton>
       </div>
     </div>
+
+    <!-- Edit modal -->
+    <UModal v-model="editOpen">
+      <UCard>
+        <template #header>
+          <h3 class="text-lg font-semibold">Edit Project</h3>
+        </template>
+        <div class="space-y-4">
+          <UFormGroup label="Project name" required>
+            <UInput v-model="editForm.name" />
+          </UFormGroup>
+          <UFormGroup label="Teams link">
+            <UInput v-model="editForm.quickTeamsLink" placeholder="https://teams.microsoft.com/..." />
+          </UFormGroup>
+        </div>
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton color="gray" variant="outline" @click="editOpen = false">Cancel</UButton>
+            <UButton :loading="saving" :disabled="!editForm.name" @click="saveEdit">Save changes</UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
 
     <UTabs :items="tabs.map(t => ({ label: t }))" v-model="selectedTab" class="mb-6" />
 

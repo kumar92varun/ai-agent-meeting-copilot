@@ -6,7 +6,6 @@ import {
   projectResourceTasks,
   risks,
   notificationSettings,
-  users,
 } from '../../db/schema'
 import { and, eq, isNull } from 'drizzle-orm'
 import {
@@ -48,7 +47,6 @@ export default defineEventHandler(async (event) => {
       standupId: standup.id,
       resourceId: att.resourceId,
       attended: att.attended,
-      attendanceSource: att.attendanceSource,
     })
     affectedResourceIds.add(att.resourceId)
   }

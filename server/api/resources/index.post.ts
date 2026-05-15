@@ -5,10 +5,9 @@ import { z } from 'zod'
 const CreateResourceSchema = z.object({
   name: z.string().min(1).max(200),
   email: z.string().email().optional(),
-  roleTitle: z.string().max(200).optional(),
   resourceType: z.enum(['developer', 'designer', 'qa', 'devops']).default('developer'),
-  joinedAt: z.string().optional(),
   isActive: z.boolean().default(true),
+  quickTeamsLink: z.string().url().optional(),
 })
 
 export default defineEventHandler(async (event) => {
@@ -24,8 +23,13 @@ export default defineEventHandler(async (event) => {
   const [resource] = await db
     .insert(resources)
     .values({
-      ...parsed.data,
-      joinedAt: parsed.data.joinedAt ? new Date(parsed.data.joinedAt) : null,
+      name: parsed.data.name,
+      email: parsed.data.email || null,
+      resourceType: parsed.data.resourceType,
+      isActive: parsed.data.isActive,
+      quickTeamsLink: parsed.data.quickTeamsLink || null,
+      // googleSub required — generate a placeholder for manually created resources
+      googleSub: `manual_${Date.now()}`,
     })
     .returning()
 

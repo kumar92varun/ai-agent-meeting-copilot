@@ -23,7 +23,6 @@ For each team member, output:
   "resourceId": "uuid",
   "resourceName": "name",
   "attended": boolean,
-  "attendanceSource": "ai_inferred",
   "confidence": "high|medium|low",
   "note": "brief note if applicable e.g. 'on leave mentioned by team lead'"
 }

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { User, Project } from '#shared/types/domain'
+import type { Resource, Project } from '#shared/types/domain'
 definePageMeta({ middleware: ['role'] })
 
-const { data: users, refresh } = await useFetch<User[]>('/api/admin/users')
+const { data: users, refresh } = await useFetch<Resource[]>('/api/admin/users')
 const { data: projects } = await useFetch<Project[]>('/api/projects')
 const toast = useToast()
 const showModal = ref(false)

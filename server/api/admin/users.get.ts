@@ -1,5 +1,5 @@
 import { getDb } from '../../db/client'
-import { users } from '../../db/schema'
+import { resources } from '../../db/schema'
 import { isNull } from 'drizzle-orm'
 
 export default defineEventHandler(async (event) => {
@@ -8,5 +8,5 @@ export default defineEventHandler(async (event) => {
   if (user.role !== 'admin') throw createError({ statusCode: 403, message: 'Admin only' })
 
   const db = getDb()
-  return db.select().from(users).where(isNull(users.deletedAt))
+  return db.select().from(resources).where(isNull(resources.deletedAt))
 })

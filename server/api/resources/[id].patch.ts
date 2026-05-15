@@ -6,10 +6,10 @@ import { z } from 'zod'
 const PatchResourceSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   email: z.string().email().optional(),
-  roleTitle: z.string().max(200).optional(),
   resourceType: z.enum(['developer', 'designer', 'qa', 'devops']).optional(),
-  joinedAt: z.string().optional(),
   isActive: z.boolean().optional(),
+  quickTeamsLink: z.string().url().nullable().optional(),
+  role: z.enum(['admin', 'project_lead']).optional(),
 })
 
 export default defineEventHandler(async (event) => {
@@ -23,10 +23,8 @@ export default defineEventHandler(async (event) => {
   if (!parsed.success) throw createError({ statusCode: 400, message: parsed.error.message })
 
   const db = getDb()
-  const { joinedAt, ...rest } = parsed.data
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const updates: any = { ...rest, updatedAt: new Date() }
-  if (joinedAt !== undefined) updates.joinedAt = new Date(joinedAt)
+  const updates: any = { ...parsed.data, updatedAt: new Date() }
   const [updated] = await db
     .update(resources)
     .set(updates)

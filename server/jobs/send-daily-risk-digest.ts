@@ -1,5 +1,5 @@
 import { getDb } from '../db/client'
-import { users, risks, notificationSettings, projectLeads } from '../db/schema'
+import { resources, risks, notificationSettings, projectLeads } from '../db/schema'
 import { eq, and, isNull, inArray } from 'drizzle-orm'
 import { getEmailProvider } from '../email'
 import { buildDailyRiskDigestEmail } from '../email/templates/daily-risk-digest'
@@ -18,8 +18,8 @@ export async function sendDailyRiskDigest() {
   for (const setting of settings) {
     const user = await db
       .select()
-      .from(users)
-      .where(and(eq(users.id, setting.userId), isNull(users.deletedAt)))
+      .from(resources)
+      .where(and(eq(resources.id, setting.userId), isNull(resources.deletedAt)))
       .limit(1)
       .then((r) => r[0])
 

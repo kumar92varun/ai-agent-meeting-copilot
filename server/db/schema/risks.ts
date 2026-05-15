@@ -2,7 +2,6 @@ import { pgTable, uuid, text, timestamp, pgEnum } from 'drizzle-orm/pg-core'
 import { projects } from './projects'
 import { resources } from './resources'
 import { standups } from './standups'
-import { users } from './users'
 
 export const riskTypeEnum = pgEnum('risk_type', ['project', 'resource'])
 export const riskCategoryEnum = pgEnum('risk_category', [
@@ -18,7 +17,7 @@ export const riskCategoryEnum = pgEnum('risk_category', [
 export const riskSeverityEnum = pgEnum('risk_severity', ['low', 'medium', 'high', 'critical'])
 export const riskStatusEnum = pgEnum('risk_status', ['open', 'acknowledged', 'resolved'])
 
-export const risks = pgTable('risks', {
+export const risks = pgTable('project_risks', {
   id: uuid('id').primaryKey().defaultRandom(),
   riskType: riskTypeEnum('risk_type').notNull(),
   projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
@@ -31,7 +30,7 @@ export const risks = pgTable('risks', {
   sourceStandupId: uuid('source_standup_id').references(() => standups.id, { onDelete: 'set null' }),
   sourceRawQuote: text('source_raw_quote'),
   status: riskStatusEnum('status').notNull().default('open'),
-  acknowledgedBy: uuid('acknowledged_by').references(() => users.id, { onDelete: 'set null' }),
+  acknowledgedBy: uuid('acknowledged_by').references(() => resources.id, { onDelete: 'set null' }),
   acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true }),
   resolutionNotes: text('resolution_notes'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

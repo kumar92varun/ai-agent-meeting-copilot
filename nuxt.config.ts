@@ -6,11 +6,23 @@ export default defineNuxtConfig({
   modules: ['@nuxt/ui', 'nuxt-auth-utils'],
 
   srcDir: 'app/',
+  serverDir: './server',
 
   css: ['~/assets/css/main.css'],
 
   runtimeConfig: {
-    sessionSecret: process.env.SESSION_SECRET || '',
+    // nuxt-auth-utils reads session password from runtimeConfig.session.password
+    session: {
+      password: process.env.SESSION_SECRET || '',
+    },
+
+    // nuxt-auth-utils reads OAuth credentials from runtimeConfig.oauth.<provider>
+    oauth: {
+      google: {
+        clientId: process.env.GOOGLE_CLIENT_ID || '',
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+      },
+    },
 
     databaseUrl: process.env.DATABASE_URL || '',
     redisUrl: process.env.REDIS_URL || '',
@@ -32,10 +44,7 @@ export default defineNuxtConfig({
     sentryDsn: process.env.SENTRY_DSN || '',
     logLevel: process.env.LOG_LEVEL || 'info',
 
-    bootstrapAdminEmail: process.env.BOOTSTRAP_ADMIN_EMAIL || '',
-    bootstrapAdminName: process.env.BOOTSTRAP_ADMIN_NAME || '',
-
-    defaultTimezone: process.env.DEFAULT_TIMEZONE || 'Asia/Kolkata',
+defaultTimezone: process.env.DEFAULT_TIMEZONE || 'Asia/Kolkata',
 
     public: {
       appUrl: process.env.APP_URL || 'http://localhost:3000',

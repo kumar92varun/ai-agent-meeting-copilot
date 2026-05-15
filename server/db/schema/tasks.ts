@@ -11,7 +11,7 @@ export const taskStatusEnum = pgEnum('task_status', [
   'cancelled',
 ])
 
-export const tasks = pgTable('tasks', {
+export const tasks = pgTable('project_tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
   projectId: uuid('project_id')
     .notNull()

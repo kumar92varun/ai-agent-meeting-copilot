@@ -1,6 +1,6 @@
 import { pgTable, uuid, text, date, integer, timestamp, pgEnum } from 'drizzle-orm/pg-core'
 import { projects } from './projects'
-import { users } from './users'
+import { resources } from './resources'
 
 export const extractionStatusEnum = pgEnum('extraction_status', [
   'pending',
@@ -10,7 +10,7 @@ export const extractionStatusEnum = pgEnum('extraction_status', [
   'failed',
 ])
 
-export const standups = pgTable('standups', {
+export const standups = pgTable('project_standups', {
   id: uuid('id').primaryKey().defaultRandom(),
   projectId: uuid('project_id')
     .notNull()
@@ -19,7 +19,7 @@ export const standups = pgTable('standups', {
   rawTranscript: text('raw_transcript').notNull(),
   ingestedByUserId: uuid('ingested_by_user_id')
     .notNull()
-    .references(() => users.id, { onDelete: 'restrict' }),
+    .references(() => resources.id, { onDelete: 'restrict' }),
   extractionStatus: extractionStatusEnum('extraction_status').notNull().default('pending'),
   llmModelUsed: text('llm_model_used'),
   tokensIn: integer('tokens_in'),

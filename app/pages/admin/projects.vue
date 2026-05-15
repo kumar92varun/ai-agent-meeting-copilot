@@ -7,17 +7,14 @@ const showModal = ref(false)
 
 const form = reactive({
   name: '',
-  clientName: '',
-  description: '',
-  status: 'active' as 'active' | 'paused' | 'completed',
-  sprintCadenceDays: 14,
+  quickTeamsLink: '',
 })
 
 async function create() {
-  await $fetch('/api/projects', { method: 'POST', body: { ...form } })
+  await $fetch('/api/projects', { method: 'POST', body: { name: form.name, quickTeamsLink: form.quickTeamsLink || undefined } })
   toast.add({ title: 'Project created', color: 'green' })
   showModal.value = false
-  Object.assign(form, { name: '', clientName: '', description: '' })
+  Object.assign(form, { name: '', quickTeamsLink: '' })
   refresh()
 }
 
@@ -40,12 +37,9 @@ async function softDelete(id: string) {
         <li v-for="project in projects" :key="project.id" class="flex items-center justify-between py-3">
           <div>
             <p class="font-medium text-gray-800">{{ project.name }}</p>
-            <p class="text-xs text-gray-500">{{ project.clientName }}</p>
+            <p v-if="project.quickTeamsLink" class="text-xs text-blue-500">{{ project.quickTeamsLink }}</p>
           </div>
-          <div class="flex items-center gap-2">
-            <UBadge :color="project.status === 'active' ? 'green' : 'gray'" variant="subtle">{{ project.status }}</UBadge>
-            <UButton icon="i-heroicons-trash" color="red" variant="ghost" size="xs" @click="softDelete(project.id)" />
-          </div>
+          <UButton icon="i-heroicons-trash" color="red" variant="ghost" size="xs" @click="softDelete(project.id)" />
         </li>
       </ul>
     </UCard>
@@ -55,11 +49,7 @@ async function softDelete(id: string) {
         <template #header><h3 class="font-semibold">New Project</h3></template>
         <div class="space-y-4">
           <UFormGroup label="Project Name"><UInput v-model="form.name" /></UFormGroup>
-          <UFormGroup label="Client Name"><UInput v-model="form.clientName" /></UFormGroup>
-          <UFormGroup label="Description"><UTextarea v-model="form.description" :rows="3" /></UFormGroup>
-          <UFormGroup label="Sprint Cadence (days)">
-            <UInput v-model.number="form.sprintCadenceDays" type="number" min="1" max="90" />
-          </UFormGroup>
+          <UFormGroup label="Teams Link"><UInput v-model="form.quickTeamsLink" placeholder="https://teams.microsoft.com/..." /></UFormGroup>
         </div>
         <template #footer>
           <div class="flex justify-end gap-2">

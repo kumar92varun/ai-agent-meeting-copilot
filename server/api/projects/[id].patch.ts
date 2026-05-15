@@ -5,11 +5,7 @@ import { z } from 'zod'
 
 const PatchProjectSchema = z.object({
   name: z.string().min(1).max(200).optional(),
-  clientName: z.string().min(1).max(200).optional(),
-  description: z.string().optional(),
-  status: z.enum(['active', 'paused', 'completed']).optional(),
-  sprintCadenceDays: z.number().int().min(1).max(90).optional(),
-  startedAt: z.string().optional(),
+  quickTeamsLink: z.string().url().nullable().optional(),
 })
 
 export default defineEventHandler(async (event) => {
@@ -23,10 +19,8 @@ export default defineEventHandler(async (event) => {
   if (!parsed.success) throw createError({ statusCode: 400, message: parsed.error.message })
 
   const db = getDb()
-  const { startedAt, ...rest } = parsed.data
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const updates: any = { ...rest, updatedAt: new Date() }
-  if (startedAt !== undefined) updates.startedAt = new Date(startedAt)
+  const updates: any = { ...parsed.data, updatedAt: new Date() }
   const [updated] = await db
     .update(projects)
     .set(updates)

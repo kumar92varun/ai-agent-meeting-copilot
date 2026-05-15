@@ -20,7 +20,7 @@ const { data: resources, pending } = await useFetch<Resource[]>('/api/resources'
               <UAvatar :alt="resource.name" size="sm" />
               <div>
                 <p class="font-medium text-gray-900">{{ resource.name }}</p>
-                <p class="text-xs text-gray-500">{{ resource.roleTitle }} · {{ resource.resourceType }}</p>
+                <p class="text-xs text-gray-500">{{ resource.resourceType }}</p>
               </div>
             </div>
             <div class="flex items-center gap-2">

@@ -1,5 +1,5 @@
 import { pgTable, uuid, timestamp, primaryKey } from 'drizzle-orm/pg-core'
-import { users } from './users'
+import { resources } from './resources'
 import { projects } from './projects'
 
 export const projectLeads = pgTable(
@@ -10,7 +10,7 @@ export const projectLeads = pgTable(
       .references(() => projects.id, { onDelete: 'cascade' }),
     userId: uuid('user_id')
       .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+      .references(() => resources.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.projectId, table.userId] })]

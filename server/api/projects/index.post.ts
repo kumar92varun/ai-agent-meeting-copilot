@@ -5,11 +5,7 @@ import { z } from 'zod'
 
 const CreateProjectSchema = z.object({
   name: z.string().min(1).max(200),
-  clientName: z.string().min(1).max(200),
-  description: z.string().optional(),
-  status: z.enum(['active', 'paused', 'completed']).default('active'),
-  sprintCadenceDays: z.number().int().min(1).max(90).default(14),
-  startedAt: z.string().optional(),
+  quickTeamsLink: z.string().url().optional(),
 })
 
 export default defineEventHandler(async (event) => {
@@ -30,8 +26,8 @@ export default defineEventHandler(async (event) => {
   const [project] = await db
     .insert(projects)
     .values({
-      ...parsed.data,
-      startedAt: parsed.data.startedAt ? new Date(parsed.data.startedAt) : null,
+      name: parsed.data.name,
+      quickTeamsLink: parsed.data.quickTeamsLink || null,
     })
     .returning()
 

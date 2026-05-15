@@ -6,8 +6,6 @@ const Schema = z.object({
   projectId: z.string().uuid(),
   resourceId: z.string().uuid(),
   allocationPct: z.number().int().min(1).max(100).default(100),
-  startedAt: z.string().optional(),
-  endedAt: z.string().optional(),
 })
 
 export default defineEventHandler(async (event) => {
@@ -22,11 +20,7 @@ export default defineEventHandler(async (event) => {
   const db = getDb()
   const [row] = await db
     .insert(projectResources)
-    .values({
-      ...parsed.data,
-      startedAt: parsed.data.startedAt ? new Date(parsed.data.startedAt) : null,
-      endedAt: parsed.data.endedAt ? new Date(parsed.data.endedAt) : null,
-    })
+    .values(parsed.data)
     .returning()
 
   return row

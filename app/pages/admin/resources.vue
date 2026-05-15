@@ -8,15 +8,15 @@ const showModal = ref(false)
 const form = reactive({
   name: '',
   email: '',
-  roleTitle: '',
   resourceType: 'developer' as 'developer' | 'designer' | 'qa' | 'devops',
+  quickTeamsLink: '',
 })
 
 async function create() {
-  await $fetch('/api/resources', { method: 'POST', body: { ...form } })
+  await $fetch('/api/resources', { method: 'POST', body: { name: form.name, email: form.email || undefined, resourceType: form.resourceType, quickTeamsLink: form.quickTeamsLink || undefined } })
   toast.add({ title: 'Resource created', color: 'green' })
   showModal.value = false
-  Object.assign(form, { name: '', email: '', roleTitle: '' })
+  Object.assign(form, { name: '', email: '', quickTeamsLink: '' })
   refresh()
 }
 
@@ -41,7 +41,7 @@ const typeOptions = ['developer', 'designer', 'qa', 'devops']
         <li v-for="r in resources" :key="r.id" class="flex items-center justify-between py-3">
           <div>
             <p class="font-medium text-gray-800">{{ r.name }}</p>
-            <p class="text-xs text-gray-500">{{ r.roleTitle }} · {{ r.resourceType }}</p>
+            <p class="text-xs text-gray-500">{{ r.resourceType }}</p>
           </div>
           <div class="flex items-center gap-2">
             <UBadge :color="r.isActive ? 'green' : 'gray'" variant="subtle">{{ r.isActive ? 'Active' : 'Inactive' }}</UBadge>
@@ -57,10 +57,10 @@ const typeOptions = ['developer', 'designer', 'qa', 'devops']
         <div class="space-y-4">
           <UFormGroup label="Name"><UInput v-model="form.name" /></UFormGroup>
           <UFormGroup label="Email"><UInput v-model="form.email" type="email" /></UFormGroup>
-          <UFormGroup label="Role Title"><UInput v-model="form.roleTitle" /></UFormGroup>
           <UFormGroup label="Type">
             <USelect v-model="form.resourceType" :options="typeOptions" />
           </UFormGroup>
+          <UFormGroup label="Teams Link"><UInput v-model="form.quickTeamsLink" placeholder="https://teams.microsoft.com/..." /></UFormGroup>
         </div>
         <template #footer>
           <div class="flex justify-end gap-2">

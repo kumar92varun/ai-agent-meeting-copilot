@@ -1,5 +1,5 @@
 import { getDb } from '../../db/client'
-import { users } from '../../db/schema'
+import { resources } from '../../db/schema'
 import { eq, isNull, and } from 'drizzle-orm'
 
 export default defineOAuthGoogleEventHandler({
@@ -20,14 +20,14 @@ export default defineOAuthGoogleEventHandler({
 
     let [dbUser] = await db
       .select()
-      .from(users)
-      .where(and(eq(users.googleSub, googleUser.sub), isNull(users.deletedAt)))
+      .from(resources)
+      .where(and(eq(resources.googleSub, googleUser.sub), isNull(resources.deletedAt)))
       .limit(1)
 
     if (!dbUser) {
       // Auto-register on first Google login (role defaults to project_lead; admin promotes manually)
       ;[dbUser] = await db
-        .insert(users)
+        .insert(resources)
         .values({
           email: googleUser.email,
           name: googleUser.name,
@@ -38,9 +38,9 @@ export default defineOAuthGoogleEventHandler({
         .returning()
     } else {
       await db
-        .update(users)
+        .update(resources)
         .set({ lastLoginAt: new Date(), avatarUrl: googleUser.picture || null, updatedAt: new Date() })
-        .where(eq(users.id, dbUser.id))
+        .where(eq(resources.id, dbUser.id))
     }
 
     await setUserSession(event, {

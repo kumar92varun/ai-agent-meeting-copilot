@@ -13,7 +13,6 @@ defineProps<{
       <div class="flex items-start justify-between mb-3">
         <div class="min-w-0 flex-1 mr-2">
           <h3 class="font-semibold text-gray-900 truncate">{{ project.name }}</h3>
-          <p class="text-xs text-gray-500 truncate">{{ project.clientName }}</p>
         </div>
         <UiHealthBadge :score="project.metrics?.healthScore" />
       </div>

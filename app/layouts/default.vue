@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { user, clear } = useUserSession()
+const { user } = useUserSession()
 const route = useRoute()
 
 const navItems = computed(() => {
@@ -16,10 +16,8 @@ const navItems = computed(() => {
   return base
 })
 
-async function logout() {
-  await $fetch('/api/auth/logout', { method: 'POST' })
-  await clear()
-  navigateTo('/login')
+function logout() {
+  window.location.href = '/api/auth/logout'
 }
 </script>
 

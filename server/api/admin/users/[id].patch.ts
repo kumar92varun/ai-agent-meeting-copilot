@@ -1,5 +1,5 @@
 import { getDb } from '../../../db/client'
-import { users, projectLeads } from '../../../db/schema'
+import { resources, projectLeads } from '../../../db/schema'
 import { and, eq, isNull } from 'drizzle-orm'
 import { z } from 'zod'
 
@@ -25,9 +25,9 @@ export default defineEventHandler(async (event) => {
   if (parsed.data.name) updates.name = parsed.data.name
 
   const [updated] = await db
-    .update(users)
+    .update(resources)
     .set(updates)
-    .where(and(eq(users.id, userId), isNull(users.deletedAt)))
+    .where(and(eq(resources.id, userId), isNull(resources.deletedAt)))
     .returning()
 
   if (!updated) throw createError({ statusCode: 404, message: 'User not found' })

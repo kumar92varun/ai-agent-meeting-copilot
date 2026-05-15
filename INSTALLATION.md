@@ -86,29 +86,6 @@ cp .env.example .env
 nano .env          # fill in all values
 ```
 
-Required values to fill:
-
-| Variable | How to get it |
-|----------|---------------|
-| `SESSION_SECRET` | Run `openssl rand -hex 32` |
-| `DATABASE_URL` | `postgresql://standup:changeme@localhost:5432/standup_intel` |
-| `REDIS_URL` | `redis://localhost:6379` |
-| `GOOGLE_CLIENT_ID` | Google Cloud Console → APIs & Services → Credentials |
-| `GOOGLE_CLIENT_SECRET` | Same |
-| `ALLOWED_EMAIL_DOMAINS` | `crownstack.com` |
-| `LLM_PROVIDER` | `openai` |
-| `LLM_MODEL` | `gpt-4o` |
-| `LLM_API_KEY` | OpenAI API key |
-| `EMBEDDING_PROVIDER` | `openai` |
-| `EMBEDDING_MODEL` | `text-embedding-3-small` |
-| `EMBEDDING_API_KEY` | Same as `LLM_API_KEY` |
-| `EMAIL_PROVIDER` | `sendgrid` |
-| `EMAIL_FROM_ADDRESS` | `noreply@crownstack.com` |
-| `SENDGRID_API_KEY` | SendGrid dashboard |
-| `SENTRY_DSN` | Sentry project settings (leave blank for local dev) |
-| `BOOTSTRAP_ADMIN_EMAIL` | Your Crownstack Google email |
-| `BOOTSTRAP_ADMIN_NAME` | Your name |
-
 ### Google OAuth setup
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com)

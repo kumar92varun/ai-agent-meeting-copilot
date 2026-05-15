@@ -1,6 +1,6 @@
 import { getDb } from '../../db/client'
 import { projects, risks, standups, dailyMetricsProject, projectLeads } from '../../db/schema'
-import { and, eq, isNull, inArray, count, gte, desc } from 'drizzle-orm'
+import { and, eq, isNull, inArray, count, gte } from 'drizzle-orm'
 import { todayDateIST, addDaysToDate } from '../../utils/dates'
 
 export default defineEventHandler(async (event) => {
@@ -23,8 +23,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const projectCond = projectIds
-    ? and(isNull(projects.deletedAt), eq(projects.status, 'active'), inArray(projects.id, projectIds))
-    : and(isNull(projects.deletedAt), eq(projects.status, 'active'))
+    ? and(isNull(projects.deletedAt), inArray(projects.id, projectIds))
+    : isNull(projects.deletedAt)
 
   const activeProjects = await db.select().from(projects).where(projectCond)
 

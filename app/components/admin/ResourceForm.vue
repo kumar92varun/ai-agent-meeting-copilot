@@ -3,8 +3,8 @@ const props = defineProps<{
   modelValue: {
     name: string
     email: string
-    roleTitle: string
     resourceType: 'developer' | 'designer' | 'qa' | 'devops'
+    quickTeamsLink: string
   }
 }>()
 
@@ -34,15 +34,15 @@ const typeOptions = [
     <UFormGroup label="Email">
       <UInput :model-value="modelValue.email" type="email" @update:model-value="update('email', $event)" />
     </UFormGroup>
-    <UFormGroup label="Role Title">
-      <UInput :model-value="modelValue.roleTitle" placeholder="e.g. Senior Frontend Engineer" @update:model-value="update('roleTitle', $event)" />
-    </UFormGroup>
     <UFormGroup label="Resource Type">
       <USelect
         :model-value="modelValue.resourceType"
         :options="typeOptions"
         @update:model-value="update('resourceType', $event)"
       />
+    </UFormGroup>
+    <UFormGroup label="Teams Link">
+      <UInput :model-value="modelValue.quickTeamsLink" placeholder="https://teams.microsoft.com/..." @update:model-value="update('quickTeamsLink', $event)" />
     </UFormGroup>
     <div class="flex justify-end gap-2 pt-2">
       <UButton color="gray" variant="outline" @click="emit('cancel')">Cancel</UButton>

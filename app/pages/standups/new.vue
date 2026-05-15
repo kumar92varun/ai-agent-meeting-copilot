@@ -45,7 +45,7 @@ interface ReviewRisk {
 }
 
 // Editable review state
-const reviewAttendance: Ref<Array<{ resourceId: string; resourceName: string; attended: boolean; attendanceSource: string }>> = ref([])
+const reviewAttendance: Ref<Array<{ resourceId: string; resourceName: string; attended: boolean }>> = ref([])
 const reviewTasks: Ref<ReviewTask[]> = ref([])
 const reviewRisks: Ref<ReviewRisk[]> = ref([])
 
@@ -227,17 +227,7 @@ const projectOptions = computed(() =>
           <li v-for="(att, i) in reviewAttendance" :key="att.resourceId" class="flex items-center justify-between">
             <span class="text-sm text-gray-700">{{ att.resourceName }}</span>
             <div class="flex items-center gap-2">
-              <UToggle
-                v-model="reviewAttendance[i].attended"
-                @update:model-value="reviewAttendance[i].attendanceSource = 'human_confirmed'"
-              />
-              <UBadge
-                :color="att.attendanceSource === 'human_confirmed' ? 'blue' : 'gray'"
-                variant="subtle"
-                class="text-xs"
-              >
-                {{ att.attendanceSource === 'human_confirmed' ? 'manual' : 'ai' }}
-              </UBadge>
+              <UToggle v-model="reviewAttendance[i].attended" />
             </div>
           </li>
         </ul>
