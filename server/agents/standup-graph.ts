@@ -1,4 +1,4 @@
-import { StateGraph, END, START } from '@langchain/langgraph'
+import { StateGraph, START, END, Annotation } from '@langchain/langgraph'
 import type {
   SpeakerSegment,
   AttendanceItem,
@@ -16,50 +16,36 @@ import { resolveDeadlinesNode } from './nodes/resolve-deadlines'
 import { estimateHoursNode } from './nodes/estimate-hours'
 import { detectRisksNode } from './nodes/detect-risks'
 
-export interface StandupGraphState {
+const StandupAnnotation = Annotation.Root({
   // Inputs
-  standupId?: string
-  projectId: string
-  projectName: string
-  standupDate: string
-  transcript: string
-  resourceList: Array<{ id: string; name: string }>
-  existingTasksByResource: Record<
-    string,
-    Array<{ id: string; title: string; description: string | null; status: string }>
-  >
+  standupId: Annotation<string | undefined>({ reducer: (_, v) => v, default: () => undefined }),
+  projectId: Annotation<string>({ reducer: (_, v) => v, default: () => '' }),
+  projectName: Annotation<string>({ reducer: (_, v) => v, default: () => '' }),
+  standupDate: Annotation<string>({ reducer: (_, v) => v, default: () => '' }),
+  transcript: Annotation<string>({ reducer: (_, v) => v, default: () => '' }),
+  resourceList: Annotation<Array<{ id: string; name: string }>>({
+    reducer: (_, v) => v,
+    default: () => [],
+  }),
+  existingTasksByResource: Annotation<
+    Record<string, Array<{ id: string; title: string; description: string | null; status: string }>>
+  >({ reducer: (_, v) => v, default: () => ({}) }),
 
   // Node outputs
-  speakerSegments: SpeakerSegment[]
-  attendance: AttendanceItem[]
-  extractedTasks: ExtractedTaskItem[]
-  matchResults: MatchResultItem[]
-  deadlineResolutions: DeadlineResolution[]
-  hourEstimates: HourEstimate[]
-  detectedRisks: ExtractedRisk[]
+  speakerSegments: Annotation<SpeakerSegment[]>({ reducer: (_, v) => v, default: () => [] }),
+  attendance: Annotation<AttendanceItem[]>({ reducer: (_, v) => v, default: () => [] }),
+  extractedTasks: Annotation<ExtractedTaskItem[]>({ reducer: (_, v) => v, default: () => [] }),
+  matchResults: Annotation<MatchResultItem[]>({ reducer: (_, v) => v, default: () => [] }),
+  deadlineResolutions: Annotation<DeadlineResolution[]>({ reducer: (_, v) => v, default: () => [] }),
+  hourEstimates: Annotation<HourEstimate[]>({ reducer: (_, v) => v, default: () => [] }),
+  detectedRisks: Annotation<ExtractedRisk[]>({ reducer: (_, v) => v, default: () => [] }),
 
   // Progress tracking (for SSE streaming)
-  completedNodes: string[]
-  errors: Record<string, string>
-}
+  completedNodes: Annotation<string[]>({ reducer: (_, v) => v, default: () => [] }),
+  errors: Annotation<Record<string, string>>({ reducer: (_, v) => v, default: () => ({}) }),
+})
 
-const initialState: StandupGraphState = {
-  projectId: '',
-  projectName: '',
-  standupDate: '',
-  transcript: '',
-  resourceList: [],
-  existingTasksByResource: {},
-  speakerSegments: [],
-  attendance: [],
-  extractedTasks: [],
-  matchResults: [],
-  deadlineResolutions: [],
-  hourEstimates: [],
-  detectedRisks: [],
-  completedNodes: [],
-  errors: {},
-}
+export type StandupGraphState = typeof StandupAnnotation.State
 
 function withProgress(
   nodeName: string,
@@ -83,60 +69,21 @@ function withProgress(
 }
 
 export function buildStandupGraph() {
-  const graph = new StateGraph<StandupGraphState>({
-    channels: {
-      standupId: { value: (_, v) => v, default: () => undefined },
-      projectId: { value: (_, v) => v, default: () => '' },
-      projectName: { value: (_, v) => v, default: () => '' },
-      standupDate: { value: (_, v) => v, default: () => '' },
-      transcript: { value: (_, v) => v, default: () => '' },
-      resourceList: { value: (_, v) => v, default: () => [] },
-      existingTasksByResource: { value: (_, v) => v, default: () => ({}) },
-      speakerSegments: { value: (_, v) => v, default: () => [] },
-      attendance: { value: (_, v) => v, default: () => [] },
-      extractedTasks: { value: (_, v) => v, default: () => [] },
-      matchResults: { value: (_, v) => v, default: () => [] },
-      deadlineResolutions: { value: (_, v) => v, default: () => [] },
-      hourEstimates: { value: (_, v) => v, default: () => [] },
-      detectedRisks: { value: (_, v) => v, default: () => [] },
-      completedNodes: { value: (_, v) => v, default: () => [] },
-      errors: { value: (_, v) => v, default: () => ({}) },
-    },
-  })
-
-  // @ts-ignore
-  graph.addNode('parse-transcript', withProgress('parse-transcript', parseTranscriptNode))
-  // @ts-ignore
-  graph.addNode('infer-attendance', withProgress('infer-attendance', inferAttendanceNode))
-  // @ts-ignore
-  graph.addNode('extract-tasks', withProgress('extract-tasks', extractTasksNode))
-  // @ts-ignore
-  graph.addNode('match-existing-tasks', withProgress('match-existing-tasks', matchExistingTasksNode))
-  // @ts-ignore
-  graph.addNode('resolve-deadlines', withProgress('resolve-deadlines', resolveDeadlinesNode))
-  // @ts-ignore
-  graph.addNode('estimate-hours', withProgress('estimate-hours', estimateHoursNode))
-  // @ts-ignore
-  graph.addNode('detect-risks', withProgress('detect-risks', detectRisksNode))
-
-  // @ts-ignore
-  graph.addEdge(START, 'parse-transcript')
-  // @ts-ignore
-  graph.addEdge('parse-transcript', 'infer-attendance')
-  // @ts-ignore
-  graph.addEdge('infer-attendance', 'extract-tasks')
-  // @ts-ignore
-  graph.addEdge('extract-tasks', 'match-existing-tasks')
-  // @ts-ignore
-  graph.addEdge('match-existing-tasks', 'resolve-deadlines')
-  // @ts-ignore
-  graph.addEdge('resolve-deadlines', 'estimate-hours')
-  // @ts-ignore
-  graph.addEdge('estimate-hours', 'detect-risks')
-  // @ts-ignore
-  graph.addEdge('detect-risks', END)
-
-  return graph.compile()
+  return new StateGraph(StandupAnnotation)
+    .addNode('parse-transcript', withProgress('parse-transcript', parseTranscriptNode))
+    .addNode('infer-attendance', withProgress('infer-attendance', inferAttendanceNode))
+    .addNode('extract-tasks', withProgress('extract-tasks', extractTasksNode))
+    .addNode('match-existing-tasks', withProgress('match-existing-tasks', matchExistingTasksNode))
+    .addNode('resolve-deadlines', withProgress('resolve-deadlines', resolveDeadlinesNode))
+    .addNode('estimate-hours', withProgress('estimate-hours', estimateHoursNode))
+    .addNode('detect-risks', withProgress('detect-risks', detectRisksNode))
+    .addEdge(START, 'parse-transcript')
+    .addEdge('parse-transcript', 'infer-attendance')
+    .addEdge('infer-attendance', 'extract-tasks')
+    .addEdge('extract-tasks', 'match-existing-tasks')
+    .addEdge('match-existing-tasks', 'resolve-deadlines')
+    .addEdge('resolve-deadlines', 'estimate-hours')
+    .addEdge('estimate-hours', 'detect-risks')
+    .addEdge('detect-risks', END)
+    .compile()
 }
-
-export { initialState }
