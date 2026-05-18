@@ -41,8 +41,8 @@ const typeOptions = [
         @update:model-value="update('resourceType', $event)"
       />
     </UFormGroup>
-    <UFormGroup label="Teams Link">
-      <UInput :model-value="modelValue.quickTeamsLink" placeholder="https://teams.microsoft.com/..." @update:model-value="update('quickTeamsLink', $event)" />
+    <UFormGroup label="Quick Teams link">
+      <UInput :model-value="modelValue.quickTeamsLink" placeholder="https://quickteams.example.com/..." @update:model-value="update('quickTeamsLink', $event)" />
     </UFormGroup>
     <div class="flex justify-end gap-2 pt-2">
       <UButton color="gray" variant="outline" @click="emit('cancel')">Cancel</UButton>

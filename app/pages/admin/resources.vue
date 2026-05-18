@@ -60,7 +60,7 @@ const typeOptions = ['developer', 'designer', 'qa', 'devops']
           <UFormGroup label="Type">
             <USelect v-model="form.resourceType" :options="typeOptions" />
           </UFormGroup>
-          <UFormGroup label="Teams Link"><UInput v-model="form.quickTeamsLink" placeholder="https://teams.microsoft.com/..." /></UFormGroup>
+          <UFormGroup label="Quick Teams link"><UInput v-model="form.quickTeamsLink" placeholder="https://quickteams.example.com/..." /></UFormGroup>
         </div>
         <template #footer>
           <div class="flex justify-end gap-2">

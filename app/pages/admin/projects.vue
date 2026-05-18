@@ -49,7 +49,7 @@ async function softDelete(id: string) {
         <template #header><h3 class="font-semibold">New Project</h3></template>
         <div class="space-y-4">
           <UFormGroup label="Project Name"><UInput v-model="form.name" /></UFormGroup>
-          <UFormGroup label="Teams Link"><UInput v-model="form.quickTeamsLink" placeholder="https://teams.microsoft.com/..." /></UFormGroup>
+          <UFormGroup label="Quick Teams link"><UInput v-model="form.quickTeamsLink" placeholder="https://quickteams.example.com/..." /></UFormGroup>
         </div>
         <template #footer>
           <div class="flex justify-end gap-2">
