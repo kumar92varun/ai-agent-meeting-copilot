@@ -25,7 +25,7 @@ export default defineOAuthGoogleEventHandler({
       .limit(1)
 
     if (!dbUser) {
-      // Auto-register on first Google login (role defaults to project_lead; admin promotes manually)
+      // First-time login — create as project_member; admin must promote to grant app access
       ;[dbUser] = await db
         .insert(resources)
         .values({
@@ -33,7 +33,7 @@ export default defineOAuthGoogleEventHandler({
           name: googleUser.name,
           googleSub: googleUser.sub,
           avatarUrl: googleUser.picture || null,
-          role: 'project_lead',
+          role: 'project_member',
         })
         .returning()
     } else {
@@ -41,6 +41,10 @@ export default defineOAuthGoogleEventHandler({
         .update(resources)
         .set({ lastLoginAt: new Date(), avatarUrl: googleUser.picture || null, updatedAt: new Date() })
         .where(eq(resources.id, dbUser.id))
+    }
+
+    if (dbUser.role === 'project_member') {
+      return sendRedirect(event, '/login?error=no_access')
     }
 
     await setUserSession(event, {

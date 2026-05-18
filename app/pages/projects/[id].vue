@@ -12,7 +12,56 @@ const { data: project, refresh: refreshProject } = await useFetch<Project>(`/api
 const { data: tasks } = await useFetch<Task[]>('/api/tasks', { query: { projectId } })
 const { data: projectRisks } = await useFetch<Risk[]>('/api/risks', { query: { projectId } })
 const { data: standups } = await useFetch<Standup[]>('/api/standups', { query: { projectId } })
-const { data: resources } = await useFetch<ProjectResource[]>('/api/project-resources', { query: { projectId } })
+const { data: resources, refresh: refreshResources } = await useFetch<ProjectResource[]>('/api/project-resources', { query: { projectId } })
+const { data: allResources } = await useFetch<import('#shared/types/domain').Resource[]>('/api/resources')
+
+// Resources not yet mapped to this project
+const availableResources = computed(() => {
+  const mapped = new Set((resources.value ?? []).map(r => r.resourceId))
+  return (allResources.value ?? []).filter(r => !mapped.has(r.id) && r.isActive)
+})
+
+const addResourceOpen = ref(false)
+const addForm = reactive({ resourceId: '', allocationPct: 100 })
+const addingResource = ref(false)
+
+function openAddResource() {
+  addForm.resourceId = ''
+  addForm.allocationPct = 100
+  addResourceOpen.value = true
+}
+
+async function addResource() {
+  addingResource.value = true
+  try {
+    await $fetch('/api/project-resources', {
+      method: 'POST',
+      body: { projectId, resourceId: addForm.resourceId, allocationPct: addForm.allocationPct },
+    })
+    toast.add({ title: 'Resource added', color: 'green' })
+    addResourceOpen.value = false
+    await refreshResources()
+  } catch {
+    toast.add({ title: 'Failed to add resource', color: 'red' })
+  } finally {
+    addingResource.value = false
+  }
+}
+
+const removingResource = ref<string | null>(null)
+async function removeResource(mappingId: string, name: string) {
+  if (!confirm(`Remove ${name} from this project?`)) return
+  removingResource.value = mappingId
+  try {
+    await $fetch(`/api/project-resources/${mappingId}`, { method: 'DELETE' })
+    toast.add({ title: 'Resource removed', color: 'green' })
+    await refreshResources()
+  } catch {
+    toast.add({ title: 'Failed to remove resource', color: 'red' })
+  } finally {
+    removingResource.value = null
+  }
+}
 
 const tabs = ['Overview', 'Tasks', 'Standups', 'Resources', 'Risks']
 const selectedTab = ref(0)
@@ -186,15 +235,66 @@ async function deleteProject() {
 
     <!-- Resources -->
     <div v-else-if="selectedTab === 3">
+      <div class="flex items-center justify-between mb-4">
+        <p class="text-sm text-gray-500">{{ resources?.length ?? 0 }} resource{{ (resources?.length ?? 0) !== 1 ? 's' : '' }} on this project</p>
+        <UButton v-if="isAdmin" icon="i-heroicons-plus" size="sm" @click="openAddResource">Add Resource</UButton>
+      </div>
       <UCard v-if="resources?.length">
         <ul class="divide-y divide-gray-100">
-          <li v-for="mapping in resources" :key="mapping.id" class="py-3">
-            <p class="font-medium text-gray-800">Resource ID: {{ mapping.resourceId }}</p>
-            <p class="text-xs text-gray-500">{{ mapping.allocationPct }}% allocation</p>
+          <li v-for="mapping in resources" :key="mapping.id" class="flex items-center justify-between py-3 gap-2">
+            <NuxtLink :to="`/resources/${mapping.resourceId}`" class="flex items-center gap-3 flex-1 min-w-0 hover:bg-gray-50 rounded-lg px-1 transition-colors">
+              <UAvatar :alt="mapping.resourceName" size="sm" />
+              <div class="min-w-0 flex-1">
+                <p class="font-medium text-gray-800 truncate">{{ mapping.resourceName }}</p>
+                <p class="text-xs text-gray-400">{{ mapping.allocationPct }}% allocation</p>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <UBadge color="gray" variant="subtle" class="capitalize">{{ mapping.resourceType }}</UBadge>
+                <UBadge :color="mapping.resourceRole === 'admin' ? 'purple' : mapping.resourceRole === 'project_lead' ? 'blue' : 'gray'" variant="subtle">
+                  {{ mapping.resourceRole === 'admin' ? 'Admin' : mapping.resourceRole === 'project_lead' ? 'Lead' : 'Member' }}
+                </UBadge>
+              </div>
+            </NuxtLink>
+            <UButton
+              v-if="isAdmin"
+              icon="i-heroicons-x-mark"
+              color="red"
+              variant="ghost"
+              size="xs"
+              :loading="removingResource === mapping.id"
+              @click="removeResource(mapping.id, mapping.resourceName)"
+            />
           </li>
         </ul>
       </UCard>
-      <div v-else class="text-center py-12 text-gray-400">No resources mapped.</div>
+      <div v-else class="text-center py-12 text-gray-400">No resources mapped. Add one to get started.</div>
+
+      <!-- Add Resource modal -->
+      <UModal v-model="addResourceOpen">
+        <UCard>
+          <template #header>
+            <h3 class="text-lg font-semibold">Add Resource to Project</h3>
+          </template>
+          <div class="space-y-4">
+            <UFormGroup label="Resource" required>
+              <USelect
+                v-model="addForm.resourceId"
+                :options="availableResources.map(r => ({ label: `${r.name} (${r.resourceType})`, value: r.id }))"
+                placeholder="Select a resource"
+              />
+            </UFormGroup>
+            <UFormGroup label="Allocation %">
+              <UInput v-model.number="addForm.allocationPct" type="number" min="1" max="100" />
+            </UFormGroup>
+          </div>
+          <template #footer>
+            <div class="flex justify-end gap-2">
+              <UButton color="gray" variant="outline" @click="addResourceOpen = false">Cancel</UButton>
+              <UButton :loading="addingResource" :disabled="!addForm.resourceId" @click="addResource">Add</UButton>
+            </div>
+          </template>
+        </UCard>
+      </UModal>
     </div>
 
     <!-- Risks -->

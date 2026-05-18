@@ -1,14 +1,14 @@
 import { pgTable, uuid, text, timestamp, boolean, pgEnum } from 'drizzle-orm/pg-core'
 
 export const resourceTypeEnum = pgEnum('resource_type', ['developer', 'designer', 'qa', 'devops'])
-export const roleEnum = pgEnum('user_role', ['admin', 'project_lead'])
+export const roleEnum = pgEnum('user_role', ['admin', 'project_lead', 'project_member'])
 
 export const resources = pgTable('resources', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   email: text('email'),
   googleSub: text('google_sub').notNull().unique(),
-  role: roleEnum('role').notNull().default('project_lead'),
+  role: roleEnum('role').notNull().default('project_member'),
   avatarUrl: text('avatar_url'),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   resourceType: resourceTypeEnum('resource_type').notNull().default('developer'),

@@ -16,8 +16,9 @@ interface ResourceTaskRow {
 const { data: resource, refresh: refreshResource } = await useFetch<Resource>(`/api/resources/${resourceId}`)
 const { data: tasks } = await useFetch<ResourceTaskRow[]>('/api/tasks', { query: { resourceId } })
 const { data: resourceRisks } = await useFetch<Risk[]>('/api/risks', { query: { resourceId } })
+const { data: projectMappings } = await useFetch<import('#shared/types/domain').ProjectResource[]>('/api/project-resources', { query: { resourceId } })
 
-const tabs = ['Performance', 'Tasks', 'Standups', 'Risks']
+const tabs = ['Performance', 'Tasks', 'Projects', 'Risks']
 const selectedTab = ref(0)
 
 const dateRange = reactive({ from: '', to: '' })
@@ -45,12 +46,13 @@ const resourceTypeOptions = [
   { label: 'DevOps', value: 'devops' },
 ]
 const roleOptions = [
+  { label: 'Project Member', value: 'project_member' },
   { label: 'Project Lead', value: 'project_lead' },
   { label: 'Admin', value: 'admin' },
 ]
 const editForm = reactive({
   name: '', email: '', resourceType: 'developer' as Resource['resourceType'],
-  isActive: true, quickTeamsLink: '', role: 'project_lead' as Resource['role'],
+  isActive: true, quickTeamsLink: '', role: 'project_member' as Resource['role'],
 })
 
 function openEdit() {
@@ -213,9 +215,22 @@ async function deleteResource() {
       <div v-else class="text-center py-12 text-gray-400">No tasks found.</div>
     </div>
 
-    <!-- Standups placeholder -->
+    <!-- Projects -->
     <div v-else-if="selectedTab === 2">
-      <div class="text-center py-12 text-gray-400">Standup history by resource coming soon.</div>
+      <UCard v-if="projectMappings?.length">
+        <ul class="divide-y divide-gray-100">
+          <li v-for="mapping in projectMappings" :key="mapping.id" class="py-3">
+            <NuxtLink :to="`/projects/${mapping.projectId}`" class="flex items-center justify-between hover:bg-gray-50 rounded-lg px-1 transition-colors">
+              <div>
+                <p class="font-medium text-gray-800">{{ mapping.projectName }}</p>
+                <p class="text-xs text-gray-400">{{ mapping.allocationPct }}% allocation</p>
+              </div>
+              <UIcon name="i-heroicons-chevron-right" class="w-4 h-4 text-gray-400" />
+            </NuxtLink>
+          </li>
+        </ul>
+      </UCard>
+      <div v-else class="text-center py-12 text-gray-400">Not assigned to any project yet.</div>
     </div>
 
     <!-- Risks -->

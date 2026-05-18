@@ -14,7 +14,7 @@ export interface Resource {
   name: string
   email: string | null
   googleSub: string
-  role: 'admin' | 'project_lead'
+  role: 'admin' | 'project_lead' | 'project_member'
   avatarUrl: string | null
   lastLoginAt: string | null
   resourceType: 'developer' | 'designer' | 'qa' | 'devops'
@@ -33,6 +33,12 @@ export interface ProjectResource {
   createdAt: string
   updatedAt: string
   deletedAt: string | null
+  // joined fields
+  resourceName: string
+  resourceType: string
+  resourceRole: string
+  resourceIsActive: boolean
+  projectName: string
 }
 
 export interface Standup {

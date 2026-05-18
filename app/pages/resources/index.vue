@@ -16,6 +16,7 @@ const resourceTypeOptions = [
 ]
 
 const roleOptions = [
+  { label: 'Project Member', value: 'project_member' },
   { label: 'Project Lead', value: 'project_lead' },
   { label: 'Admin', value: 'admin' },
 ]
@@ -30,12 +31,12 @@ const form = reactive({
   resourceType: 'developer' as Resource['resourceType'],
   isActive: true,
   quickTeamsLink: '',
-  role: 'project_lead' as Resource['role'],
+  role: 'project_member' as Resource['role'],
 })
 
 function openCreate() {
   editing.value = null
-  Object.assign(form, { name: '', email: '', resourceType: 'developer', isActive: true, quickTeamsLink: '', role: 'project_lead' })
+  Object.assign(form, { name: '', email: '', resourceType: 'developer', isActive: true, quickTeamsLink: '', role: 'project_member' })
   modalOpen.value = true
 }
 
@@ -127,6 +128,9 @@ const resourceTypeColor: Record<string, string> = {
             <div class="flex items-center gap-2 shrink-0">
               <UBadge :color="(resourceTypeColor[r.resourceType] ?? 'gray') as any" variant="subtle" class="capitalize">
                 {{ r.resourceType }}
+              </UBadge>
+              <UBadge :color="r.role === 'admin' ? 'purple' : r.role === 'project_lead' ? 'blue' : 'gray'" variant="subtle">
+                {{ r.role === 'admin' ? 'Admin' : r.role === 'project_lead' ? 'Project Lead' : 'Member' }}
               </UBadge>
               <UBadge :color="r.isActive ? 'green' : 'gray'" variant="subtle">
                 {{ r.isActive ? 'Active' : 'Inactive' }}

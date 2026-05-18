@@ -9,7 +9,7 @@ const PatchResourceSchema = z.object({
   resourceType: z.enum(['developer', 'designer', 'qa', 'devops']).optional(),
   isActive: z.boolean().optional(),
   quickTeamsLink: z.string().url().nullable().optional(),
-  role: z.enum(['admin', 'project_lead']).optional(),
+  role: z.enum(['admin', 'project_lead', 'project_member']).optional(),
 })
 
 export default defineEventHandler(async (event) => {

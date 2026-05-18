@@ -15,7 +15,10 @@ function signInWithGoogle() {
       <p class="text-sm text-gray-500 mt-1">Crownstack project health platform</p>
     </div>
 
-    <UAlert v-if="error" color="red" variant="soft" class="mb-4 text-left">
+    <UAlert v-if="error === 'no_access'" color="orange" variant="soft" class="mb-4 text-left">
+      You don't have access to this application.
+    </UAlert>
+    <UAlert v-else-if="error" color="red" variant="soft" class="mb-4 text-left">
       Login failed. Please try again with a Crownstack Google account.
     </UAlert>
 

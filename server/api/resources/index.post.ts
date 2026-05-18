@@ -8,6 +8,7 @@ const CreateResourceSchema = z.object({
   resourceType: z.enum(['developer', 'designer', 'qa', 'devops']).default('developer'),
   isActive: z.boolean().default(true),
   quickTeamsLink: z.string().url().optional(),
+  role: z.enum(['admin', 'project_lead', 'project_member']).default('project_member'),
 })
 
 export default defineEventHandler(async (event) => {
@@ -28,7 +29,7 @@ export default defineEventHandler(async (event) => {
       resourceType: parsed.data.resourceType,
       isActive: parsed.data.isActive,
       quickTeamsLink: parsed.data.quickTeamsLink || null,
-      // googleSub required — generate a placeholder for manually created resources
+      role: parsed.data.role,
       googleSub: `manual_${Date.now()}`,
     })
     .returning()
