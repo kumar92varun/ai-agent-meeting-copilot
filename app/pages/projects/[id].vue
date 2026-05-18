@@ -87,7 +87,7 @@ async function deleteProject() {
           <span>{{ project?.name }}</span>
         </div>
         <h1 class="text-2xl font-bold text-gray-900">{{ project?.name }}</h1>
-        <a v-if="project?.quickTeamsLink" :href="project.quickTeamsLink" target="_blank" rel="noopener" class="text-sm text-blue-500 hover:underline">Teams link</a>
+        <a v-if="project?.quickTeamsLink" :href="project.quickTeamsLink" target="_blank" rel="noopener" class="text-sm text-blue-500 hover:underline">Quick Teams link</a>
       </div>
       <div class="flex gap-2">
         <UButton icon="i-heroicons-arrow-path" color="gray" variant="outline" :loading="refreshing" size="sm" @click="refreshMetrics">
@@ -115,8 +115,8 @@ async function deleteProject() {
           <UFormGroup label="Project name" required>
             <UInput v-model="editForm.name" />
           </UFormGroup>
-          <UFormGroup label="Teams link">
-            <UInput v-model="editForm.quickTeamsLink" placeholder="https://teams.microsoft.com/..." />
+          <UFormGroup label="Quick Teams link">
+            <UInput v-model="editForm.quickTeamsLink" placeholder="https://quickteams.example.com/..." />
           </UFormGroup>
         </div>
         <template #footer>

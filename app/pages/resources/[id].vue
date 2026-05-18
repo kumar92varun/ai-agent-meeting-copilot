@@ -2,14 +2,18 @@
 import type { Resource, Risk, DailyMetricsResource, Task, ProjectResourceTask } from '#shared/types/domain'
 definePageMeta({ middleware: ['role'] })
 const route = useRoute()
+const router = useRouter()
 const resourceId = route.params.id as string
+const { user } = useUserSession()
+const isAdmin = computed(() => (user.value as { role?: string })?.role === 'admin')
+const toast = useToast()
 
 interface ResourceTaskRow {
   task: Task
   assignment: ProjectResourceTask
 }
 
-const { data: resource } = await useFetch<Resource>(`/api/resources/${resourceId}`)
+const { data: resource, refresh: refreshResource } = await useFetch<Resource>(`/api/resources/${resourceId}`)
 const { data: tasks } = await useFetch<ResourceTaskRow[]>('/api/tasks', { query: { resourceId } })
 const { data: resourceRisks } = await useFetch<Risk[]>('/api/risks', { query: { resourceId } })
 
@@ -22,8 +26,6 @@ const { data: metrics } = await useFetch<DailyMetricsResource[]>('/api/metrics/r
 })
 
 const refreshing = ref(false)
-const toast = useToast()
-
 async function refreshMetrics() {
   refreshing.value = true
   try {
@@ -31,6 +33,76 @@ async function refreshMetrics() {
     toast.add({ title: 'Refresh queued', color: 'green' })
   } finally {
     refreshing.value = false
+  }
+}
+
+// ── edit modal ─────────────────────────────────────────────
+const editOpen = ref(false)
+const resourceTypeOptions = [
+  { label: 'Developer', value: 'developer' },
+  { label: 'Designer', value: 'designer' },
+  { label: 'QA', value: 'qa' },
+  { label: 'DevOps', value: 'devops' },
+]
+const roleOptions = [
+  { label: 'Project Lead', value: 'project_lead' },
+  { label: 'Admin', value: 'admin' },
+]
+const editForm = reactive({
+  name: '', email: '', resourceType: 'developer' as Resource['resourceType'],
+  isActive: true, quickTeamsLink: '', role: 'project_lead' as Resource['role'],
+})
+
+function openEdit() {
+  if (!resource.value) return
+  Object.assign(editForm, {
+    name: resource.value.name,
+    email: resource.value.email ?? '',
+    resourceType: resource.value.resourceType,
+    isActive: resource.value.isActive,
+    quickTeamsLink: resource.value.quickTeamsLink ?? '',
+    role: resource.value.role,
+  })
+  editOpen.value = true
+}
+
+const saving = ref(false)
+async function saveEdit() {
+  saving.value = true
+  try {
+    await $fetch(`/api/resources/${resourceId}`, {
+      method: 'PATCH',
+      body: {
+        name: editForm.name,
+        email: editForm.email || undefined,
+        resourceType: editForm.resourceType,
+        isActive: editForm.isActive,
+        quickTeamsLink: editForm.quickTeamsLink || null,
+        role: editForm.role,
+      },
+    })
+    toast.add({ title: 'Resource updated', color: 'green' })
+    editOpen.value = false
+    await refreshResource()
+  } catch {
+    toast.add({ title: 'Failed to update resource', color: 'red' })
+  } finally {
+    saving.value = false
+  }
+}
+
+// ── delete ─────────────────────────────────────────────────
+const deleting = ref(false)
+async function deleteResource() {
+  if (!confirm(`Delete "${resource.value?.name}"? This cannot be undone.`)) return
+  deleting.value = true
+  try {
+    await $fetch(`/api/resources/${resourceId}`, { method: 'DELETE' })
+    toast.add({ title: 'Resource deleted', color: 'green' })
+    router.push('/resources')
+  } catch {
+    toast.add({ title: 'Failed to delete resource', color: 'red' })
+    deleting.value = false
   }
 }
 </script>
@@ -45,12 +117,63 @@ async function refreshMetrics() {
           <span>{{ resource?.name }}</span>
         </div>
         <h1 class="text-2xl font-bold text-gray-900">{{ resource?.name }}</h1>
-        <p class="text-sm text-gray-500">{{ resource?.resourceType }}</p>
+        <div class="flex items-center gap-2 mt-1">
+          <span class="text-sm text-gray-500 capitalize">{{ resource?.resourceType }}</span>
+          <UBadge :color="resource?.isActive ? 'green' : 'gray'" variant="subtle" size="xs">
+            {{ resource?.isActive ? 'Active' : 'Inactive' }}
+          </UBadge>
+          <UBadge v-if="resource?.role === 'admin'" color="purple" variant="subtle" size="xs">Admin</UBadge>
+        </div>
+        <a v-if="resource?.quickTeamsLink" :href="resource.quickTeamsLink" target="_blank" rel="noopener" class="text-sm text-blue-500 hover:underline mt-1 inline-block">Quick Teams link</a>
       </div>
-      <UButton icon="i-heroicons-arrow-path" color="gray" variant="outline" size="sm" :loading="refreshing" @click="refreshMetrics">
-        Refresh Metrics
-      </UButton>
+      <div class="flex gap-2">
+        <UButton icon="i-heroicons-arrow-path" color="gray" variant="outline" size="sm" :loading="refreshing" @click="refreshMetrics">
+          Refresh Metrics
+        </UButton>
+        <UButton v-if="isAdmin" icon="i-heroicons-pencil-square" color="gray" variant="outline" size="sm" @click="openEdit">Edit</UButton>
+        <UButton v-if="isAdmin" icon="i-heroicons-trash" color="red" variant="outline" size="sm" :loading="deleting" @click="deleteResource">Delete</UButton>
+      </div>
     </div>
+
+    <!-- Edit modal -->
+    <UModal v-model="editOpen">
+      <UCard>
+        <template #header>
+          <h3 class="text-lg font-semibold">Edit Resource</h3>
+        </template>
+        <div class="space-y-4">
+          <UFormGroup label="Name" required>
+            <UInput v-model="editForm.name" />
+          </UFormGroup>
+          <UFormGroup label="Email">
+            <UInput v-model="editForm.email" type="email" />
+          </UFormGroup>
+          <div class="grid grid-cols-2 gap-4">
+            <UFormGroup label="Type">
+              <USelect v-model="editForm.resourceType" :options="resourceTypeOptions" />
+            </UFormGroup>
+            <UFormGroup label="Role">
+              <USelect v-model="editForm.role" :options="roleOptions" />
+            </UFormGroup>
+          </div>
+          <UFormGroup label="Quick Teams link">
+            <UInput v-model="editForm.quickTeamsLink" placeholder="https://quickteams.example.com/..." />
+          </UFormGroup>
+          <UFormGroup label="Status">
+            <div class="flex items-center gap-3 pt-1">
+              <UToggle v-model="editForm.isActive" />
+              <span class="text-sm text-gray-600">{{ editForm.isActive ? 'Active' : 'Inactive' }}</span>
+            </div>
+          </UFormGroup>
+        </div>
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton color="gray" variant="outline" @click="editOpen = false">Cancel</UButton>
+            <UButton :loading="saving" :disabled="!editForm.name" @click="saveEdit">Save changes</UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
 
     <UTabs :items="tabs.map(t => ({ label: t }))" v-model="selectedTab" class="mb-6" />
 

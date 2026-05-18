@@ -120,8 +120,8 @@ async function deleteProject(project: Project) {
           <UFormGroup label="Project name" required>
             <UInput v-model="form.name" placeholder="e.g. Acme Mobile App" />
           </UFormGroup>
-          <UFormGroup label="Teams link">
-            <UInput v-model="form.quickTeamsLink" placeholder="https://teams.microsoft.com/..." />
+          <UFormGroup label="Quick Teams link">
+            <UInput v-model="form.quickTeamsLink" placeholder="https://quickteams.example.com/..." />
           </UFormGroup>
         </div>
 
