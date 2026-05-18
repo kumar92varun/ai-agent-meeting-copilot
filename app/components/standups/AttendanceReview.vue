@@ -1,9 +1,5 @@
 <script setup lang="ts">
-export interface AttendanceRow {
-  resourceId: string
-  resourceName: string
-  attended: boolean
-}
+import type { AttendanceRow } from '#shared/types/api'
 
 const props = defineProps<{ modelValue: AttendanceRow[] }>()
 const emit = defineEmits<{ 'update:modelValue': [value: AttendanceRow[]] }>()

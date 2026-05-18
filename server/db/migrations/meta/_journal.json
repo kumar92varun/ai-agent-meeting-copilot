@@ -50,6 +50,13 @@
       "when": 1747353604000,
       "tag": "0006_standup_intelligence",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1747353605000,
+      "tag": "0007_fix_standup_intelligence",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { Project } from '#shared/types/domain'
-import type { ExtractedTask, ExtractedRisk, IdentifiedClientMember } from '#shared/types/api'
-import type { AttendanceRow } from '~/components/standups/AttendanceReview.vue'
+import type { AttendanceRow, ExtractedTask, ExtractedRisk, IdentifiedClientMember } from '#shared/types/api'
 
 definePageMeta({ middleware: ['role'] })
 
@@ -40,38 +39,60 @@ async function analyze() {
   progressNodes.value = []
   analysisError.value = ''
 
-  const response = await fetch('/api/standups/analyze', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...form }),
-  })
+  let response: Response
+  try {
+    response = await fetch('/api/standups/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...form }),
+    })
+  } catch (err) {
+    analysisError.value = 'Network error — could not reach the server'
+    return
+  }
+
+  if (!response.ok) {
+    const errBody = await response.json().catch(() => ({}))
+    analysisError.value = (errBody as { message?: string }).message ?? `Server error ${response.status}`
+    return
+  }
 
   const reader = response.body!.getReader()
   const decoder = new TextDecoder()
+  // Buffer partial lines across chunks
+  let buffer = ''
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
 
-    const chunk = decoder.decode(value)
-    for (const line of chunk.split('\n')) {
-      if (!line.startsWith('data: ')) continue
-      try {
-        const event = JSON.parse(line.slice(6))
-        if (event.type === 'progress' && event.node) {
-          progressNodes.value.push(event.node)
-        } else if (event.type === 'result' && event.data) {
-          rawExtraction.value = event.data
-          reviewAttendance.value = event.data.attendance ?? []
-          reviewTasks.value = event.data.tasks ?? []
-          reviewRisks.value = event.data.risks ?? []
-          reviewClientMembers.value = event.data.identifiedClientMembers ?? []
-          step.value = 'review'
-        } else if (event.type === 'error') {
-          analysisError.value = event.error ?? 'Unknown error'
-        }
-      } catch {}
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      // Keep the last (potentially incomplete) line in the buffer
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        try {
+          const event = JSON.parse(line.slice(6))
+          if (event.type === 'progress' && event.node) {
+            progressNodes.value.push(event.node)
+          } else if (event.type === 'result' && event.data) {
+            rawExtraction.value = event.data
+            reviewAttendance.value = event.data.attendance ?? []
+            reviewTasks.value = event.data.tasks ?? []
+            reviewRisks.value = event.data.risks ?? []
+            reviewClientMembers.value = event.data.identifiedClientMembers ?? []
+            step.value = 'review'
+          } else if (event.type === 'error') {
+            analysisError.value = event.error ?? 'Analysis error'
+          }
+        } catch {}
+      }
     }
+  } catch (err) {
+    analysisError.value = 'Lost connection while reading analysis stream'
   }
 
   if (step.value === 'analyzing') {
@@ -114,7 +135,7 @@ const projectOptions = computed(() =>
   <div class="p-4 md:p-8 max-w-4xl mx-auto">
     <UiPageHeader
       title="New Standup"
-      description="Paste transcript, analyze, review, and save"
+      subtitle="Paste transcript, analyze, review, and save"
     />
 
     <!-- Step 1: Input -->

@@ -49,6 +49,13 @@ export interface AttendanceItem {
   rawQuote: string | null
 }
 
+// Used as the v-model shape in AttendanceReview component
+export interface AttendanceRow {
+  resourceId: string
+  resourceName: string
+  attended: boolean
+}
+
 export interface IdentifiedClientMember {
   name: string
   inferredRole: string | null
