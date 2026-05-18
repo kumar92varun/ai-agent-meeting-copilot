@@ -74,9 +74,13 @@ export default defineEventHandler(async (event) => {
     affectedResourceIds.add(att.resourceId)
   }
 
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
   // Persist tasks
   for (const extracted of body.extraction.tasks) {
-    let taskId = extracted.existingTaskId
+    // LLM sometimes returns ":null", "null", or other non-UUID strings — treat all as no match
+    const rawId = extracted.existingTaskId
+    let taskId: string | null = rawId && UUID_RE.test(rawId) ? rawId : null
 
     if (!taskId) {
       const [newTask] = await db
