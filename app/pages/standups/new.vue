@@ -84,7 +84,16 @@ async function analyze() {
             reviewTasks.value = event.data.tasks ?? []
             reviewRisks.value = event.data.risks ?? []
             reviewClientMembers.value = event.data.identifiedClientMembers ?? []
-            step.value = 'review'
+            // Only move to review if at least some data came back
+            if (
+              reviewAttendance.value.length > 0 ||
+              reviewTasks.value.length > 0 ||
+              reviewRisks.value.length > 0
+            ) {
+              step.value = 'review'
+            } else {
+              analysisError.value = analysisError.value || 'Extraction returned no data — check server logs for LLM errors'
+            }
           } else if (event.type === 'error') {
             analysisError.value = event.error ?? 'Analysis error'
           }
