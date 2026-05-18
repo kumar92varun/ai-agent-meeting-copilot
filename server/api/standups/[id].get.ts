@@ -1,5 +1,15 @@
 import { getDb } from '../../db/client'
-import { standups, standupUpdates, projectLeads } from '../../db/schema'
+import {
+  standups,
+  standupUpdates,
+  resources,
+  tasks,
+  projectResourceTasks,
+  risks,
+  projectLeads,
+  projectClientTeamMembers,
+  projectTaskClientAssignments,
+} from '../../db/schema'
 import { and, eq, isNull } from 'drizzle-orm'
 
 export default defineEventHandler(async (event) => {
@@ -25,10 +35,62 @@ export default defineEventHandler(async (event) => {
     if (!lead) throw createError({ statusCode: 403, message: 'Access denied' })
   }
 
+  // Attendance with resource names
   const updates = await db
-    .select()
+    .select({
+      id: standupUpdates.id,
+      resourceId: standupUpdates.resourceId,
+      resourceName: resources.name,
+      resourceType: resources.resourceType,
+      attended: standupUpdates.attended,
+      completedYesterdaySummary: standupUpdates.completedYesterdaySummary,
+      workingTodaySummary: standupUpdates.workingTodaySummary,
+      createdAt: standupUpdates.createdAt,
+    })
     .from(standupUpdates)
+    .innerJoin(resources, eq(standupUpdates.resourceId, resources.id))
     .where(eq(standupUpdates.standupId, standupId))
 
-  return { ...standup, updates }
+  // Tasks first mentioned in this standup
+  const standupTasks = await db
+    .select({
+      id: tasks.id,
+      title: tasks.title,
+      description: tasks.description,
+      status: tasks.status,
+      resourceId: projectResourceTasks.resourceId,
+      resourceName: resources.name,
+      resolvedDeadlineDate: projectResourceTasks.resolvedDeadlineDate,
+      commitmentConfidence: projectResourceTasks.commitmentConfidence,
+      aiEstimatedHoursMin: projectResourceTasks.aiEstimatedHoursMin,
+      aiEstimatedHoursMax: projectResourceTasks.aiEstimatedHoursMax,
+      aiEstimateConfidence: projectResourceTasks.aiEstimateConfidence,
+    })
+    .from(tasks)
+    .innerJoin(projectResourceTasks, and(
+      eq(projectResourceTasks.taskId, tasks.id),
+      isNull(projectResourceTasks.deletedAt),
+    ))
+    .innerJoin(resources, eq(projectResourceTasks.resourceId, resources.id))
+    .where(and(eq(tasks.firstMentionedStandupId, standupId), isNull(tasks.deletedAt)))
+
+  // Risks sourced from this standup
+  const standupRisks = await db
+    .select()
+    .from(risks)
+    .where(and(eq(risks.sourceStandupId, standupId), isNull(risks.deletedAt)))
+
+  // Client team members first mentioned in this standup
+  const clientMembers = await db
+    .select()
+    .from(projectClientTeamMembers)
+    .where(eq(projectClientTeamMembers.firstMentionedStandupId, standupId))
+
+  return {
+    ...standup,
+    updates,
+    tasks: standupTasks,
+    risks: standupRisks,
+    clientMembers,
+  }
 })

@@ -5,7 +5,13 @@ export const SpeakerSegmentSchema = z.object({
   matchedResourceId: z.string().nullable(),
   matchedResourceName: z.string().nullable(),
   matchConfidence: z.enum(['high', 'medium', 'low']),
+  isClientTeamMember: z.boolean().default(false),
   text: z.string(),
+})
+
+export const ClientTeamMemberItemSchema = z.object({
+  name: z.string(),
+  inferredRole: z.string().nullable(),
 })
 
 export const AttendanceItemSchema = z.object({
@@ -14,6 +20,11 @@ export const AttendanceItemSchema = z.object({
   attended: z.boolean(),
   confidence: z.enum(['high', 'medium', 'low']),
   note: z.string().optional(),
+})
+
+export const TaskClientLinkSchema = z.object({
+  clientMemberName: z.string(),
+  assignmentType: z.enum(['assigned_by', 'mentioned_by', 'reviewing']),
 })
 
 export const ExtractedTaskItemSchema = z.object({
@@ -26,6 +37,7 @@ export const ExtractedTaskItemSchema = z.object({
   commitmentConfidence: z.enum(['firm', 'vague', 'aspirational']),
   isCarriedOver: z.boolean().default(false),
   rawQuote: z.string().nullable(),
+  clientMemberLinks: z.array(TaskClientLinkSchema).default([]),
 })
 
 export const MatchResultItemSchema = z.object({
@@ -75,7 +87,9 @@ export const ExtractedRiskSchema = z.object({
 })
 
 export type SpeakerSegment = z.infer<typeof SpeakerSegmentSchema>
+export type ClientTeamMemberItem = z.infer<typeof ClientTeamMemberItemSchema>
 export type AttendanceItem = z.infer<typeof AttendanceItemSchema>
+export type TaskClientLink = z.infer<typeof TaskClientLinkSchema>
 export type ExtractedTaskItem = z.infer<typeof ExtractedTaskItemSchema>
 export type MatchResultItem = z.infer<typeof MatchResultItemSchema>
 export type DeadlineResolution = z.infer<typeof DeadlineResolutionSchema>

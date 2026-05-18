@@ -1,5 +1,5 @@
 import { getDb } from '../db/client'
-import { embeddings, standups, tasks, risks } from '../db/schema'
+import { vectorStore, standups, tasks, risks } from '../db/schema'
 import { eq } from 'drizzle-orm'
 import { getEmbeddingModel, getLlmMeta } from '../llm'
 import { logger } from '../utils/logger'
@@ -7,6 +7,8 @@ import { logger } from '../utils/logger'
 export interface GenerateEmbeddingPayload {
   entityType: 'standup' | 'task' | 'risk'
   entityId: string
+  projectId?: string
+  resourceId?: string
 }
 
 export async function generateEmbedding(payload: GenerateEmbeddingPayload) {
@@ -32,9 +34,11 @@ export async function generateEmbedding(payload: GenerateEmbeddingPayload) {
 
   const vector = await embeddingModel.embedQuery(content)
 
-  await db.insert(embeddings).values({
+  await db.insert(vectorStore).values({
     entityType: payload.entityType,
     entityId: payload.entityId,
+    projectId: payload.projectId ?? null,
+    resourceId: payload.resourceId ?? null,
     content,
     embedding: vector,
     modelUsed: modelId,

@@ -36,6 +36,20 @@
       "when": 1747353602000,
       "tag": "0004_rename_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1747353603000,
+      "tag": "0005_add_project_member_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1747353604000,
+      "tag": "0006_standup_intelligence",
+      "breakpoints": true
     }
   ]
 }

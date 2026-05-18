@@ -33,6 +33,7 @@ export interface StandupStreamEvent {
 // The full extraction result returned after analysis
 export interface ExtractionResult {
   attendance: AttendanceItem[]
+  identifiedClientMembers: IdentifiedClientMember[]
   tasks: ExtractedTask[]
   risks: ExtractedRisk[]
   llmModelUsed: string
@@ -46,6 +47,16 @@ export interface AttendanceItem {
   resourceName: string
   attended: boolean
   rawQuote: string | null
+}
+
+export interface IdentifiedClientMember {
+  name: string
+  inferredRole: string | null
+}
+
+export interface TaskClientLink {
+  clientMemberName: string
+  assignmentType: 'assigned_by' | 'mentioned_by' | 'reviewing'
 }
 
 export interface ExtractedTask {
@@ -65,6 +76,7 @@ export interface ExtractedTask {
   isCompleted: boolean
   isCarriedOver: boolean
   rawQuote: string | null
+  clientMemberLinks: TaskClientLink[]
 }
 
 export interface ExtractedRisk {

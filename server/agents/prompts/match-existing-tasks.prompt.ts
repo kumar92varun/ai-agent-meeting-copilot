@@ -3,16 +3,16 @@ export function buildMatchExistingTasksPrompt(): string {
 
 TASK: For each extracted task, decide if it refers to an existing open task or is a brand-new task.
 
-MATCHING RULES:
-- Match if the extracted task title/description clearly refers to the same work as an existing task
-- Allow for paraphrasing and natural language variation (e.g. "API integration" matches "Integrate payment API")
-- Do NOT match if the task is clearly different work even if wording is similar
-- When in doubt, mark as new task (safer to create a duplicate than merge incorrectly)
-- If it is a match: provide the existingTaskId and any updated description if new info was heard
+INPUT FORMAT:
+- extractedTasks: array of newly extracted task objects
+- candidatesByIndex: object keyed by extracted task index, each value is an array of semantically similar existing tasks found via vector search
 
-You will receive:
-1. extractedTasks: array of newly extracted task objects
-2. existingTasks: array of open tasks for this resource with id, title, description, status
+MATCHING RULES:
+- Only consider the candidates provided in candidatesByIndex for each task — these were pre-selected by semantic similarity
+- Match if the extracted task clearly refers to the same work as a candidate (allow paraphrasing and Hinglish variation)
+- Do NOT match if the task is clearly different work even if wording is similar
+- When in doubt, mark as new task — safer to create a duplicate than to merge incorrectly
+- If it is a match: provide the existingTaskId and any updated description if new info was heard
 
 For each extracted task, output:
 {

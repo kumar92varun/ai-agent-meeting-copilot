@@ -1,5 +1,12 @@
 import { getDb } from '../../db/client'
-import { projects, projectResources, resources, tasks, projectResourceTasks } from '../../db/schema'
+import {
+  projects,
+  projectResources,
+  resources,
+  tasks,
+  projectResourceTasks,
+  projectClientTeamMembers,
+} from '../../db/schema'
 import { and, eq, isNull } from 'drizzle-orm'
 import { buildStandupGraph } from '../../agents/standup-graph'
 import type { ExtractedTaskItem, MatchResultItem, DeadlineResolution, HourEstimate } from '../../agents/schemas'
@@ -13,7 +20,7 @@ const AnalyzeSchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-  await getUserSession(event) // auth check
+  await getUserSession(event)
 
   const body = await readBody(event)
   const parsed = AnalyzeSchema.safeParse(body)
@@ -50,11 +57,26 @@ export default defineEventHandler(async (event) => {
         status: tasks.status,
       })
       .from(tasks)
-      .innerJoin(projectResourceTasks, and(eq(projectResourceTasks.taskId, tasks.id), eq(projectResourceTasks.resourceId, resource.id)))
+      .innerJoin(
+        projectResourceTasks,
+        and(eq(projectResourceTasks.taskId, tasks.id), eq(projectResourceTasks.resourceId, resource.id))
+      )
       .where(and(isNull(tasks.deletedAt), isNull(projectResourceTasks.deletedAt)))
 
     existingTasksByResource[resource.id] = openTasks
   }
+
+  // Load known client team members for this project
+  const clientMemberRows = await db
+    .select()
+    .from(projectClientTeamMembers)
+    .where(eq(projectClientTeamMembers.projectId, projectId))
+
+  const knownClientMembers = clientMemberRows.map((c) => ({
+    id: c.id,
+    name: c.name,
+    inferredRole: c.inferredRole,
+  }))
 
   // Set up SSE
   setHeader(event, 'Content-Type', 'text/event-stream')
@@ -81,17 +103,16 @@ export default defineEventHandler(async (event) => {
       'detect-risks': 'Detecting risks…',
     }
 
-    let lastCompletedCount = 0
     const finalState = await graph.invoke({
       projectId,
       projectName: project.name,
       standupDate,
       transcript,
       resourceList,
+      knownClientMembers,
       existingTasksByResource,
     })
 
-    // Emit progress events for each completed node
     for (const nodeName of finalState.completedNodes) {
       send({ type: 'progress', node: nodeName, message: NODE_LABELS[nodeName] || nodeName })
     }
@@ -106,6 +127,7 @@ export default defineEventHandler(async (event) => {
       type: 'result',
       data: {
         attendance: finalState.attendance,
+        identifiedClientMembers: finalState.identifiedClientMembers,
         tasks: finalState.extractedTasks.map((t: ExtractedTaskItem, i: number) => {
           const matchResult = finalState.matchResults.find((m: MatchResultItem) => m.extractedIndex === i)
           const deadlineRes = finalState.deadlineResolutions.find(
@@ -129,6 +151,7 @@ export default defineEventHandler(async (event) => {
             isCompleted: t.type === 'completed',
             isCarriedOver: t.isCarriedOver,
             rawQuote: t.rawQuote,
+            clientMemberLinks: t.clientMemberLinks,
           }
         }),
         risks: finalState.detectedRisks,

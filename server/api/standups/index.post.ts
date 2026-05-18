@@ -6,6 +6,8 @@ import {
   projectResourceTasks,
   risks,
   notificationSettings,
+  projectClientTeamMembers,
+  projectTaskClientAssignments,
 } from '../../db/schema'
 import { and, eq, isNull } from 'drizzle-orm'
 import {
@@ -40,6 +42,27 @@ export default defineEventHandler(async (event) => {
     .returning()
 
   const affectedResourceIds = new Set<string>()
+
+  // Upsert client team members discovered in this standup
+  const clientMemberIdByName: Record<string, string> = {}
+
+  for (const member of body.extraction.identifiedClientMembers) {
+    const [upserted] = await db
+      .insert(projectClientTeamMembers)
+      .values({
+        projectId: body.projectId,
+        name: member.name,
+        inferredRole: member.inferredRole ?? null,
+        firstMentionedStandupId: standup.id,
+      })
+      .onConflictDoUpdate({
+        target: [projectClientTeamMembers.projectId, projectClientTeamMembers.name],
+        set: { updatedAt: new Date() },
+      })
+      .returning()
+
+    clientMemberIdByName[member.name.toLowerCase()] = upserted.id
+  }
 
   // Persist attendance
   for (const att of body.extraction.attendance) {
@@ -114,12 +137,51 @@ export default defineEventHandler(async (event) => {
       })
     }
 
+    // Save client member links for this task
+    for (const link of extracted.clientMemberLinks ?? []) {
+      const clientMemberId = clientMemberIdByName[link.clientMemberName.toLowerCase()]
+      if (!clientMemberId) continue
+
+      await db
+        .insert(projectTaskClientAssignments)
+        .values({
+          taskId,
+          clientMemberId,
+          assignmentType: link.assignmentType,
+          sourceStandupId: standup.id,
+        })
+        .onConflictDoNothing()
+    }
+
+    // Enqueue task embedding — one per (task, resource) pair
+    await generateEmbeddingQueue.add('embed-task', {
+      entityType: 'task',
+      entityId: taskId,
+      projectId: body.projectId,
+      resourceId: extracted.resourceId,
+    })
+
     affectedResourceIds.add(extracted.resourceId)
   }
 
-  // Persist risks
+  // Persist risks — insert no-risk sentinel if nothing was detected
+  const risksToSave = body.extraction.risks.length > 0
+    ? body.extraction.risks
+    : [{
+        riskType: 'project' as const,
+        projectId: body.projectId,
+        resourceId: null,
+        category: 'other' as const,
+        severity: 'low' as const,
+        title: 'No risks detected',
+        description: 'The AI found no risks in this standup.',
+        aiReasoning: 'No anomalies, blockers, missed deadlines, or patterns of concern were identified.',
+        sourceRawQuote: null,
+        isNoRiskSentinel: true,
+      }]
+
   const immediateSeverities = ['high', 'critical']
-  for (const risk of body.extraction.risks) {
+  for (const risk of risksToSave) {
     const [savedRisk] = await db
       .insert(risks)
       .values({
@@ -133,12 +195,12 @@ export default defineEventHandler(async (event) => {
         aiReasoning: risk.aiReasoning,
         sourceStandupId: standup.id,
         sourceRawQuote: risk.sourceRawQuote || null,
-        status: 'open',
+        // Sentinel records are pre-acknowledged so they don't pollute open risk counts
+        status: 'isNoRiskSentinel' in risk && risk.isNoRiskSentinel ? 'acknowledged' : 'open',
       })
       .returning()
 
-    // Enqueue immediate alert if severity threshold met
-    if (immediateSeverities.includes(risk.severity)) {
+    if (immediateSeverities.includes(risk.severity) && !('isNoRiskSentinel' in risk && risk.isNoRiskSentinel)) {
       await sendNotificationEmailQueue.add('risk-alert', {
         riskId: savedRisk.id,
         severity: risk.severity,
@@ -148,6 +210,8 @@ export default defineEventHandler(async (event) => {
     await generateEmbeddingQueue.add('embed-risk', {
       entityType: 'risk',
       entityId: savedRisk.id,
+      projectId: risk.projectId || body.projectId,
+      resourceId: risk.resourceId || null,
     })
   }
 
@@ -155,6 +219,7 @@ export default defineEventHandler(async (event) => {
   await generateEmbeddingQueue.add('embed-standup', {
     entityType: 'standup',
     entityId: standup.id,
+    projectId: body.projectId,
   })
 
   await computeProjectRollupsQueue.add('after-standup', { projectId: body.projectId })

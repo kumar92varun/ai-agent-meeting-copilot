@@ -1,6 +1,7 @@
 import { StateGraph, START, END, Annotation } from '@langchain/langgraph'
 import type {
   SpeakerSegment,
+  ClientTeamMemberItem,
   AttendanceItem,
   ExtractedTaskItem,
   MatchResultItem,
@@ -27,12 +28,18 @@ const StandupAnnotation = Annotation.Root({
     reducer: (_, v) => v,
     default: () => [],
   }),
+  knownClientMembers: Annotation<Array<{ id: string; name: string; inferredRole: string | null }>>({
+    reducer: (_, v) => v,
+    default: () => [],
+  }),
   existingTasksByResource: Annotation<
     Record<string, Array<{ id: string; title: string; description: string | null; status: string }>>
   >({ reducer: (_, v) => v, default: () => ({}) }),
 
   // Node outputs
   speakerSegments: Annotation<SpeakerSegment[]>({ reducer: (_, v) => v, default: () => [] }),
+  identifiedClientMembers: Annotation<ClientTeamMemberItem[]>({ reducer: (_, v) => v, default: () => [] }),
+  fathomActionItems: Annotation<string[]>({ reducer: (_, v) => v, default: () => [] }),
   attendance: Annotation<AttendanceItem[]>({ reducer: (_, v) => v, default: () => [] }),
   extractedTasks: Annotation<ExtractedTaskItem[]>({ reducer: (_, v) => v, default: () => [] }),
   matchResults: Annotation<MatchResultItem[]>({ reducer: (_, v) => v, default: () => [] }),
