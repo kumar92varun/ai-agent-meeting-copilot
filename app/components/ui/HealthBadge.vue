@@ -15,5 +15,5 @@ const label = computed(() => {
 </script>
 
 <template>
-  <UBadge :color="color" variant="subtle">{{ label }}</UBadge>
+  <UBadge :color="color" variant="subtle" class="font-semibold tabular-nums">{{ label }}</UBadge>
 </template>

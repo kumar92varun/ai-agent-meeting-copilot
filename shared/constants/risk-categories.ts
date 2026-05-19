@@ -6,6 +6,8 @@ export const RISK_CATEGORIES = {
   BLOCKER_UNRESOLVED: 'blocker_unresolved',
   ESTIMATE_MISMATCH: 'estimate_mismatch',
   VAGUE_COMMITMENT: 'vague_commitment',
+  SUSTAINED_LOW_MORALE: 'sustained_low_morale',
+  TEAM_TENSION: 'team_tension',
   OTHER: 'other',
 } as const
 
@@ -19,6 +21,8 @@ export const RISK_CATEGORY_LABELS: Record<RiskCategory, string> = {
   blocker_unresolved: 'Blocker Unresolved',
   estimate_mismatch: 'Estimate Mismatch',
   vague_commitment: 'Vague Commitment',
+  sustained_low_morale: 'Sustained Low Morale',
+  team_tension: 'Team Tension',
   other: 'Other',
 }
 

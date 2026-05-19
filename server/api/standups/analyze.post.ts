@@ -7,7 +7,7 @@ import {
   projectResourceTasks,
   projectClientTeamMembers,
 } from '../../db/schema'
-import { and, eq, isNull } from 'drizzle-orm'
+import { and, eq, isNull, desc } from 'drizzle-orm'
 import { buildStandupGraph } from '../../agents/standup-graph'
 import type { StandupGraphState } from '../../agents/standup-graph'
 import { getLlmMeta } from '../../llm'
@@ -41,28 +41,20 @@ export default defineEventHandler(async (event) => {
 
   if (!project) throw createError({ statusCode: 404, message: 'Project not found' })
 
+  // Team members for this project
   const mappings = await db
     .select({ resource: resources })
     .from(projectResources)
     .innerJoin(resources, eq(projectResources.resourceId, resources.id))
     .where(and(eq(projectResources.projectId, projectId), isNull(projectResources.deletedAt)))
 
-  const resourceList = mappings.map((m) => ({ id: m.resource.id, name: m.resource.name }))
+  const resourceList = mappings.map((m) => ({
+    id: m.resource.id,
+    name: m.resource.name,
+    resourceType: m.resource.resourceType,
+  }))
 
-  const existingTasksByResource: Record<string, Array<{ id: string; title: string; description: string | null; status: string }>> = {}
-  for (const { resource } of mappings) {
-    const openTasks = await db
-      .select({ id: tasks.id, title: tasks.title, description: tasks.description, status: tasks.status })
-      .from(tasks)
-      .innerJoin(
-        projectResourceTasks,
-        and(eq(projectResourceTasks.taskId, tasks.id), eq(projectResourceTasks.resourceId, resource.id))
-      )
-      .where(and(isNull(tasks.deletedAt), isNull(projectResourceTasks.deletedAt)))
-
-    existingTasksByResource[resource.id] = openTasks
-  }
-
+  // Known client members
   const clientMemberRows = await db
     .select()
     .from(projectClientTeamMembers)
@@ -74,7 +66,57 @@ export default defineEventHandler(async (event) => {
     inferredRole: c.inferredRole,
   }))
 
-  // SSE setup — disable Nagle so each write flushes immediately
+  // Last 100 tasks for this project (all statuses) for AI matching
+  const recentTaskRows = await db
+    .select({
+      id: tasks.id,
+      title: tasks.title,
+      description: tasks.description,
+      status: tasks.status,
+      lastMentionedAt: tasks.lastMentionedAt,
+      timesSlipped: tasks.timesSlipped,
+    })
+    .from(tasks)
+    .where(and(eq(tasks.projectId, projectId), isNull(tasks.deletedAt)))
+    .orderBy(desc(tasks.updatedAt))
+    .limit(100)
+
+  // For each task, fetch assignee names
+  const taskIds = recentTaskRows.map((t) => t.id)
+  const assigneeRows = taskIds.length
+    ? await db
+        .select({
+          taskId: projectResourceTasks.taskId,
+          resourceName: resources.name,
+        })
+        .from(projectResourceTasks)
+        .innerJoin(resources, eq(projectResourceTasks.resourceId, resources.id))
+        .where(and(
+          isNull(projectResourceTasks.deletedAt),
+          // Filter to only our task IDs
+          ...[]  // handled below via JS filter
+        ))
+    : []
+
+  // Build assignee map
+  const assigneeNamesByTask: Record<string, string[]> = {}
+  for (const row of assigneeRows) {
+    if (!taskIds.includes(row.taskId)) continue
+    if (!assigneeNamesByTask[row.taskId]) assigneeNamesByTask[row.taskId] = []
+    assigneeNamesByTask[row.taskId].push(row.resourceName)
+  }
+
+  const recentProjectTasks = recentTaskRows.map((t) => ({
+    id: t.id,
+    title: t.title,
+    description: t.description,
+    status: t.status,
+    assigneeNames: assigneeNamesByTask[t.id] ?? [],
+    lastMentionedAt: t.lastMentionedAt,
+    timesSlipped: t.timesSlipped,
+  }))
+
+  // SSE setup
   const res = event.node.res
   res.socket?.setNoDelay(true)
   setHeader(event, 'Content-Type', 'text/event-stream')
@@ -100,7 +142,7 @@ export default defineEventHandler(async (event) => {
         transcript,
         resourceList,
         knownClientMembers,
-        existingTasksByResource,
+        recentProjectTasks,
       },
       { streamMode: 'values' }
     )
@@ -119,26 +161,26 @@ export default defineEventHandler(async (event) => {
       lastCompletedCount = completed.length
     }
 
+    // Report node-level errors first
+    if (Object.keys(finalState?.errors ?? {}).length > 0) {
+      send({ type: 'error', error: JSON.stringify(finalState!.errors) })
+    }
+
     if (!finalState?.analysis) {
-      send({ type: 'error', error: 'Graph produced no output' })
+      send({ type: 'error', error: 'Analysis produced no output — check server logs for the LLM error above.' })
       send({ type: 'done' })
       res.end()
       return
     }
 
-    if (Object.keys(finalState.errors ?? {}).length > 0) {
-      send({ type: 'error', error: JSON.stringify(finalState.errors) })
-    }
-
     const { analysis } = finalState
     const processingMs = Date.now() - startTime
 
-    // Flatten task-level risks into the top-level risks array expected by the save endpoint.
-    // Task risks become resource-scoped risks; standalone risks pass through as-is.
+    // Flatten task-level risks into the top-level risks array
     const taskRisks = analysis.tasks.flatMap((t) =>
       t.risks.map((r) => ({
         riskType: 'resource' as const,
-        projectId: projectId,
+        projectId,
         resourceId: t.resourceId,
         category: r.category,
         severity: r.severity,
@@ -151,7 +193,7 @@ export default defineEventHandler(async (event) => {
 
     const standaloneRisks = analysis.risks.map((r) => ({
       riskType: r.riskType,
-      projectId: projectId,
+      projectId,
       resourceId: r.resourceId,
       category: r.category,
       severity: r.severity,
@@ -168,23 +210,61 @@ export default defineEventHandler(async (event) => {
         identifiedClientMembers: analysis.clientTeamMembers,
         tasks: analysis.tasks.map((t) => ({
           existingTaskId: t.existingTaskId ?? null,
+          matchConfidence: t.matchConfidence ?? null,
+          matchReasoning: t.matchReasoning ?? null,
+          isContextUpdate: t.isContextUpdate,
+          learntContext: t.learntContext ?? null,
+
+          resourceId: t.resourceId,
+          additionalAssigneeIds: t.additionalAssigneeIds,
+          saidByResourceId: t.saidByResourceId ?? null,
+          type: t.type,
+
           title: t.title,
           description: t.description,
-          resourceId: t.resourceId,
+          rawQuote: t.rawQuote,
+
+          priority: t.priority ?? null,
+          taskCategory: t.taskCategory ?? null,
+          complexity: t.complexity ?? null,
+          tags: t.tags,
+          isClientFacing: t.isClientFacing,
+          isBlocking: t.isBlocking,
+          blockedByDescription: t.blockedByDescription ?? null,
+          dependsOnDescription: t.dependsOnDescription ?? null,
+          targetEnvironment: t.targetEnvironment,
+          externalReferences: t.externalReferences,
+
+          resourceTaskCompletionConfidence: t.resourceTaskCompletionConfidence,
+          isCarriedOver: t.isCarriedOver,
+
           resolvedDeadlineDate: t.resolvedDeadline ?? null,
           originalDeadlinePhrase: t.deadlinePhrase ?? null,
+          deadlineIsCompletion: t.deadlineIsCompletion,
+
           resourceEstimatedHours: t.resourceEstimatedHours ?? null,
           aiEstimatedHoursMin: t.aiEstimatedHoursMin ?? null,
           aiEstimatedHoursMax: t.aiEstimatedHoursMax ?? null,
           aiEstimateConfidence: t.aiEstimateConfidence ?? null,
           aiEstimateReasoning: t.aiEstimateReasoning ?? null,
-          commitmentConfidence: t.commitmentConfidence,
-          isCompleted: t.type === 'completed',
-          isCarriedOver: t.isCarriedOver,
-          rawQuote: t.rawQuote,
+
+          aiExtractionConfidence: t.aiExtractionConfidence,
           clientMemberLinks: t.clientMemberLinks,
         })),
         risks: [...taskRisks, ...standaloneRisks],
+        morale: {
+          personSignals: analysis.morale.personSignals.map((p) => ({
+            resourceId: p.resourceId,
+            resourceName: null, // enriched on save
+            sentiment: p.sentiment,
+            engagementLevel: p.engagementLevel,
+            workloadSignal: p.workloadSignal,
+            stressSignal: p.stressSignal,
+            signals: p.signals,
+            rawQuotes: p.rawQuotes,
+          })),
+          teamSummary: analysis.morale.teamSummary,
+        },
         llmModelUsed: modelId,
         tokensIn: 0,
         tokensOut: 0,

@@ -16,7 +16,7 @@ export async function analyzeStandupNode(state: StandupGraphState): Promise<Part
     transcript,
     resourceList,
     knownClientMembers,
-    existingTasksByResource,
+    recentProjectTasks,
     standupId,
   } = state
 
@@ -38,14 +38,14 @@ export async function analyzeStandupNode(state: StandupGraphState): Promise<Part
           weekday,
           resourceList,
           knownClientMembers,
-          existingTasksByResource,
+          recentProjectTasks,
         )
       ),
       new HumanMessage(
         [
           transcript,
           fathomActionItems.length
-            ? `\nFathom ACTION ITEMs (supplementary — enrich existing tasks, do not duplicate):\n${fathomActionItems.map((a) => `- ${a}`).join('\n')}`
+            ? `\nFathom ACTION ITEMs (enrich existing tasks, do not duplicate):\n${fathomActionItems.map((a) => `- ${a}`).join('\n')}`
             : '',
         ]
           .filter(Boolean)

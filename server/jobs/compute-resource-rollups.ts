@@ -1,6 +1,6 @@
 import { getDb } from '../db/client'
 import { projectResourceTasks, risks, standupUpdates, standups, dailyMetricsResource, tasks } from '../db/schema'
-import { eq, and, isNull, count, sql } from 'drizzle-orm'
+import { eq, and, isNull, count } from 'drizzle-orm'
 import { todayDateIST } from '../utils/dates'
 import { logger } from '../utils/logger'
 
@@ -16,7 +16,6 @@ export async function computeResourceRollups(payload: ComputeResourceRollupsPayl
 
   logger.info({ resourceId, metricDate }, 'Computing resource rollups')
 
-  // Attendance for today's standups
   const attendanceRows = await db
     .select({ attended: standupUpdates.attended })
     .from(standupUpdates)
@@ -28,18 +27,22 @@ export async function computeResourceRollups(payload: ComputeResourceRollupsPayl
       ? attendanceRows.filter((r) => r.attended).length / attendanceRows.length
       : 0
 
-  // Tasks
+  // Tasks assigned to this resource — read all fields from project_tasks now
   const taskRows = await db
     .select({
       status: tasks.status,
-      totalDaysSlipped: projectResourceTasks.totalDaysSlipped,
-      resourceEstimatedHours: projectResourceTasks.resourceEstimatedHours,
-      aiEstimatedHoursMin: projectResourceTasks.aiEstimatedHoursMin,
-      aiEstimatedHoursMax: projectResourceTasks.aiEstimatedHoursMax,
+      totalDaysSlipped: tasks.totalDaysSlipped,
+      resourceEstimatedHours: tasks.resourceEstimatedHours,
+      aiEstimatedHoursMin: tasks.aiEstimatedHoursMin,
+      aiEstimatedHoursMax: tasks.aiEstimatedHoursMax,
     })
     .from(projectResourceTasks)
     .innerJoin(tasks, eq(projectResourceTasks.taskId, tasks.id))
-    .where(and(eq(projectResourceTasks.resourceId, resourceId), isNull(projectResourceTasks.deletedAt)))
+    .where(and(
+      eq(projectResourceTasks.resourceId, resourceId),
+      isNull(projectResourceTasks.deletedAt),
+      isNull(tasks.deletedAt)
+    ))
 
   const tasksCommitted = taskRows.length
   const tasksCompletedOnTime = taskRows.filter(
@@ -52,9 +55,7 @@ export async function computeResourceRollups(payload: ComputeResourceRollupsPayl
     0
   )
   const totalAiMidpoint = taskRows.reduce(
-    (sum, r) =>
-      sum +
-      ((r.aiEstimatedHoursMin || 0) + (r.aiEstimatedHoursMax || 0)) / 2,
+    (sum, r) => sum + ((r.aiEstimatedHoursMin || 0) + (r.aiEstimatedHoursMax || 0)) / 2,
     0
   )
 

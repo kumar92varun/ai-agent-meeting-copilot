@@ -9,8 +9,9 @@ import {
   projectLeads,
   projectClientTeamMembers,
   projectTaskClientAssignments,
+  standupMoraleSignals,
 } from '../../db/schema'
-import { and, eq, isNull } from 'drizzle-orm'
+import { and, eq, isNull, asc } from 'drizzle-orm'
 
 export default defineEventHandler(async (event) => {
   const session = await getUserSession(event)
@@ -51,7 +52,7 @@ export default defineEventHandler(async (event) => {
     .innerJoin(resources, eq(standupUpdates.resourceId, resources.id))
     .where(eq(standupUpdates.standupId, standupId))
 
-  // Tasks first mentioned in this standup
+  // Tasks first mentioned in this standup — fields now live on project_tasks
   const standupTasks = await db
     .select({
       id: tasks.id,
@@ -60,11 +61,11 @@ export default defineEventHandler(async (event) => {
       status: tasks.status,
       resourceId: projectResourceTasks.resourceId,
       resourceName: resources.name,
-      resolvedDeadlineDate: projectResourceTasks.resolvedDeadlineDate,
-      commitmentConfidence: projectResourceTasks.commitmentConfidence,
-      aiEstimatedHoursMin: projectResourceTasks.aiEstimatedHoursMin,
-      aiEstimatedHoursMax: projectResourceTasks.aiEstimatedHoursMax,
-      aiEstimateConfidence: projectResourceTasks.aiEstimateConfidence,
+      resolvedDeadlineDate: tasks.resolvedDeadlineDate,
+      resourceTaskCompletionConfidence: tasks.resourceTaskCompletionConfidence,
+      aiEstimatedHoursMin: tasks.aiEstimatedHoursMin,
+      aiEstimatedHoursMax: tasks.aiEstimatedHoursMax,
+      aiEstimateConfidence: tasks.aiEstimateConfidence,
     })
     .from(tasks)
     .innerJoin(projectResourceTasks, and(
@@ -86,11 +87,25 @@ export default defineEventHandler(async (event) => {
     .from(projectClientTeamMembers)
     .where(eq(projectClientTeamMembers.firstMentionedStandupId, standupId))
 
+  // Morale signals for this standup
+  const moraleRows = await db
+    .select()
+    .from(standupMoraleSignals)
+    .where(eq(standupMoraleSignals.standupId, standupId))
+    .orderBy(asc(standupMoraleSignals.createdAt))
+
+  const moralePersonSignals = moraleRows.filter((r) => r.resourceId !== null)
+  const moraleTeamSummary = moraleRows.find((r) => r.resourceId === null) ?? null
+
   return {
     ...standup,
     updates,
     tasks: standupTasks,
     risks: standupRisks,
     clientMembers,
+    morale: {
+      personSignals: moralePersonSignals,
+      teamSummary: moraleTeamSummary,
+    },
   }
 })

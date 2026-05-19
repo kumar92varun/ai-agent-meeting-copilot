@@ -22,51 +22,82 @@ function logout() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50 flex">
+  <div class="min-h-screen bg-slate-50 flex">
     <!-- Sidebar (desktop) -->
-    <aside class="hidden lg:flex lg:flex-col w-64 bg-white border-r border-gray-200 fixed inset-y-0 z-30">
-      <div class="flex items-center h-16 px-6 border-b border-gray-100">
-        <span class="text-lg font-bold text-blue-800">Standup Intel</span>
+    <aside class="hidden lg:flex lg:flex-col w-64 bg-white border-r border-slate-200/80 fixed inset-y-0 z-30">
+      <!-- Logo -->
+      <div class="flex items-center h-16 px-5 border-b border-slate-100">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-sm">
+            <UIcon name="i-heroicons-cpu-chip" class="w-4.5 h-4.5 text-white" />
+          </div>
+          <span class="text-[15px] font-semibold text-slate-800 tracking-tight">Standup Intel</span>
+        </div>
       </div>
-      <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
+
+      <!-- Nav -->
+      <nav class="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         <NuxtLink
           v-for="item in navItems"
           :key="item.to"
           :to="item.to"
-          class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-          :class="route.path.startsWith(item.to) ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100'"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
+          :class="route.path.startsWith(item.to)
+            ? 'bg-indigo-50 text-indigo-700'
+            : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'"
         >
-          <UIcon :name="item.icon" class="w-5 h-5 flex-shrink-0" />
+          <div
+            class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
+            :class="route.path.startsWith(item.to)
+              ? 'bg-indigo-100 text-indigo-600'
+              : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'"
+          >
+            <UIcon :name="item.icon" class="w-4 h-4" />
+          </div>
           {{ item.label }}
         </NuxtLink>
       </nav>
-      <div class="p-4 border-t border-gray-100">
-        <div class="flex items-center gap-3">
-          <UAvatar :src="(user as { avatarUrl?: string })?.avatarUrl || undefined" size="sm" />
+
+      <!-- User -->
+      <div class="p-3 border-t border-slate-100">
+        <div class="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-slate-50 transition-colors">
+          <UAvatar :src="(user as { avatarUrl?: string })?.avatarUrl || undefined" size="sm" class="ring-2 ring-slate-100" />
           <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium text-gray-800 truncate">{{ (user as { name?: string })?.name }}</p>
-            <p class="text-xs text-gray-500 truncate capitalize">{{ (user as { role?: string })?.role?.replace('_', ' ') }}</p>
+            <p class="text-sm font-medium text-slate-700 truncate">{{ (user as { name?: string })?.name }}</p>
+            <p class="text-xs text-slate-400 truncate capitalize">{{ (user as { role?: string })?.role?.replace('_', ' ') }}</p>
           </div>
-          <UButton icon="i-heroicons-arrow-right-on-rectangle" color="gray" variant="ghost" size="xs" @click="logout" />
+          <UButton
+            icon="i-heroicons-arrow-right-on-rectangle"
+            color="gray"
+            variant="ghost"
+            size="xs"
+            class="text-slate-400 hover:text-slate-600"
+            @click="logout"
+          />
         </div>
       </div>
     </aside>
 
     <!-- Mobile top bar -->
-    <div class="lg:hidden fixed top-0 inset-x-0 z-30 bg-white border-b border-gray-200 h-14 flex items-center px-4 gap-4">
-      <span class="text-base font-bold text-blue-800 flex-1">Standup Intel</span>
+    <div class="lg:hidden fixed top-0 inset-x-0 z-30 bg-white border-b border-slate-200 h-14 flex items-center px-4 gap-4">
+      <div class="flex items-center gap-2 flex-1">
+        <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
+          <UIcon name="i-heroicons-cpu-chip" class="w-3.5 h-3.5 text-white" />
+        </div>
+        <span class="text-base font-semibold text-slate-800">Standup Intel</span>
+      </div>
       <UButton icon="i-heroicons-bars-3" color="gray" variant="ghost" @click="mobileOpen = !mobileOpen" />
     </div>
 
     <!-- Mobile drawer -->
     <USlideover v-model="mobileOpen" side="left" class="lg:hidden">
-      <nav class="p-4 space-y-1">
+      <nav class="p-3 space-y-0.5">
         <NuxtLink
           v-for="item in navItems"
           :key="item.to"
           :to="item.to"
-          class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium"
-          :class="route.path.startsWith(item.to) ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100'"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium"
+          :class="route.path.startsWith(item.to) ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500 hover:bg-slate-50'"
           @click="mobileOpen = false"
         >
           <UIcon :name="item.icon" class="w-5 h-5" />

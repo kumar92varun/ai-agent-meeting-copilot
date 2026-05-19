@@ -8,8 +8,11 @@ import {
   notificationSettings,
   projectClientTeamMembers,
   projectTaskClientAssignments,
+  taskHistory,
+  resources,
+  standupMoraleSignals,
 } from '../../db/schema'
-import { and, eq, isNull } from 'drizzle-orm'
+import { and, eq, isNull, ne, desc, inArray } from 'drizzle-orm'
 import {
   computeProjectRollupsQueue,
   computeResourceRollupsQueue,
@@ -17,15 +20,16 @@ import {
   sendNotificationEmailQueue,
 } from '../../jobs/queues'
 import type { SaveStandupRequest } from '../../../shared/types/api'
+import { fromISTDate, toISTDate } from '../../utils/dates'
 
 export default defineEventHandler(async (event) => {
   const session = await getUserSession(event)
-  const user = session.user as { id: string }
+  const user = session.user as { id: string; name?: string }
 
   const body: SaveStandupRequest = await readBody(event)
   const db = getDb()
 
-  // Persist everything in a transaction
+  // ── 1. Insert standup record ────────────────────────────────────
   const [standup] = await db
     .insert(standups)
     .values({
@@ -43,9 +47,8 @@ export default defineEventHandler(async (event) => {
 
   const affectedResourceIds = new Set<string>()
 
-  // Upsert client team members discovered in this standup
+  // ── 2. Upsert client team members ──────────────────────────────
   const clientMemberIdByName: Record<string, string> = {}
-
   for (const member of body.extraction.identifiedClientMembers) {
     const [upserted] = await db
       .insert(projectClientTeamMembers)
@@ -60,11 +63,10 @@ export default defineEventHandler(async (event) => {
         set: { updatedAt: new Date() },
       })
       .returning()
-
     clientMemberIdByName[member.name.toLowerCase()] = upserted.id
   }
 
-  // Persist attendance
+  // ── 3. Persist attendance ──────────────────────────────────────
   for (const att of body.extraction.attendance) {
     await db.insert(standupUpdates).values({
       standupId: standup.id,
@@ -76,99 +78,267 @@ export default defineEventHandler(async (event) => {
 
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-  // Persist tasks
+  // ── 4. Persist tasks ───────────────────────────────────────────
   for (const extracted of body.extraction.tasks) {
-    // LLM sometimes returns ":null", "null", or other non-UUID strings — treat all as no match
-    const rawId = extracted.existingTaskId
-    let taskId: string | null = rawId && UUID_RE.test(rawId) ? rawId : null
+    const rawExistingId = extracted.existingTaskId
+    const isExistingTask = !!(rawExistingId && UUID_RE.test(rawExistingId))
+    const taskId = isExistingTask ? rawExistingId! : null
 
-    if (!taskId) {
+    const newStatus = extracted.type === 'completed'
+      ? 'completed'
+      : extracted.isCarriedOver
+        ? 'carried_over'
+        : 'committed'
+
+    if (isExistingTask && taskId) {
+      // ── Existing task: update fields + write history ─────────────
+      const [existing] = await db
+        .select()
+        .from(tasks)
+        .where(and(eq(tasks.id, taskId), isNull(tasks.deletedAt)))
+        .limit(1)
+
+      if (existing) {
+        const prevDeadline = existing.resolvedDeadlineDate
+        const newDeadline = extracted.resolvedDeadlineDate || null
+        const deadlineExtended =
+          prevDeadline &&
+          newDeadline &&
+          newDeadline > prevDeadline &&
+          newStatus !== 'completed'
+
+        await db
+          .update(tasks)
+          .set({
+            title: extracted.title,
+            description: extracted.description || existing.description,
+            status: newStatus,
+            taskUpdateType: extracted.type,
+            priority: (extracted.priority as any) || existing.priority,
+            taskCategory: (extracted.taskCategory as any) || existing.taskCategory,
+            complexity: (extracted.complexity as any) || existing.complexity,
+            tags: extracted.tags.length ? extracted.tags : existing.tags,
+            isClientFacing: extracted.isClientFacing,
+            isBlocking: extracted.isBlocking,
+            blockedByDescription: extracted.blockedByDescription || existing.blockedByDescription,
+            dependsOnDescription: extracted.dependsOnDescription || existing.dependsOnDescription,
+            targetEnvironment: (extracted.targetEnvironment as any) || existing.targetEnvironment,
+            externalReferences: extracted.externalReferences.length
+              ? extracted.externalReferences
+              : existing.externalReferences,
+            rawQuote: extracted.rawQuote || existing.rawQuote,
+            saidByResourceId: extracted.saidByResourceId && UUID_RE.test(extracted.saidByResourceId)
+              ? extracted.saidByResourceId
+              : existing.saidByResourceId,
+            resourceTaskCompletionConfidence: (extracted.resourceTaskCompletionConfidence as any) || existing.resourceTaskCompletionConfidence,
+            isCarriedOver: extracted.isCarriedOver,
+            originalDeadlinePhrase: extracted.originalDeadlinePhrase || existing.originalDeadlinePhrase,
+            resolvedDeadlineDate: newDeadline || existing.resolvedDeadlineDate,
+            deadlineIsCompletion: extracted.deadlineIsCompletion,
+            resourceEstimatedHours: extracted.resourceEstimatedHours ?? existing.resourceEstimatedHours,
+            aiEstimatedHoursMin: extracted.aiEstimatedHoursMin ?? existing.aiEstimatedHoursMin,
+            aiEstimatedHoursMax: extracted.aiEstimatedHoursMax ?? existing.aiEstimatedHoursMax,
+            aiEstimateConfidence: (extracted.aiEstimateConfidence as any) ?? existing.aiEstimateConfidence,
+            aiEstimateReasoning: extracted.aiEstimateReasoning || existing.aiEstimateReasoning,
+            timesSlipped: deadlineExtended ? (existing.timesSlipped + 1) : existing.timesSlipped,
+            totalDaysSlipped: deadlineExtended && prevDeadline && newDeadline
+              ? existing.totalDaysSlipped + Math.ceil(
+                  (fromISTDate(newDeadline).getTime() - fromISTDate(prevDeadline).getTime()) / 86400000
+                )
+              : existing.totalDaysSlipped,
+            aiMatchConfidence: (extracted.matchConfidence as any) || existing.aiMatchConfidence,
+            aiMatchReasoning: extracted.matchReasoning || existing.aiMatchReasoning,
+            aiExtractionConfidence: (extracted.aiExtractionConfidence as any) || existing.aiExtractionConfidence,
+            lastMentionedStandupId: standup.id,
+            lastMentionedAt: body.standupDate,
+            standupMentionCount: (existing.standupMentionCount ?? 1) + 1,
+            updatedAt: new Date(),
+          })
+          .where(eq(tasks.id, taskId))
+
+        // Write history entry
+        if (deadlineExtended) {
+          await db.insert(taskHistory).values({
+            taskId,
+            standupId: standup.id,
+            actorLabel: 'AI',
+            changeType: 'deadline_extended',
+            fieldName: 'resolved_deadline_date',
+            oldValue: prevDeadline,
+            newValue: newDeadline,
+            note: `Deadline extended from ${prevDeadline} to ${newDeadline}`,
+          })
+        }
+
+        if (newStatus === 'completed' && existing.status !== 'completed') {
+          await db.insert(taskHistory).values({
+            taskId,
+            standupId: standup.id,
+            actorLabel: 'AI',
+            changeType: 'status_changed',
+            fieldName: 'status',
+            oldValue: existing.status,
+            newValue: 'completed',
+            note: `Task marked as completed in standup on ${body.standupDate}`,
+          })
+        }
+
+        if (extracted.isContextUpdate && extracted.learntContext) {
+          await db.insert(taskHistory).values({
+            taskId,
+            standupId: standup.id,
+            actorLabel: 'AI',
+            changeType: 'ai_updated',
+            learntContext: extracted.learntContext,
+            note: `New context learnt on ${body.standupDate}: ${extracted.learntContext.slice(0, 120)}`,
+          })
+        }
+
+        if (!deadlineExtended && newStatus !== 'completed' && !extracted.isContextUpdate) {
+          await db.insert(taskHistory).values({
+            taskId,
+            standupId: standup.id,
+            actorLabel: 'AI',
+            changeType: 'standup_mentioned',
+            note: `Task mentioned in standup on ${body.standupDate}`,
+          })
+        }
+      }
+    } else {
+      // ── New task: insert + first history entry ───────────────────
       const [newTask] = await db
         .insert(tasks)
         .values({
           projectId: body.projectId,
           title: extracted.title,
           description: extracted.description || null,
-          status: extracted.isCompleted ? 'completed' : 'committed',
+          status: newStatus as any,
+          taskUpdateType: extracted.type as any,
+          priority: (extracted.priority as any) || null,
+          taskCategory: (extracted.taskCategory as any) || null,
+          complexity: (extracted.complexity as any) || null,
+          tags: extracted.tags,
+          isClientFacing: extracted.isClientFacing,
+          isBlocking: extracted.isBlocking,
+          blockedByDescription: extracted.blockedByDescription || null,
+          dependsOnDescription: extracted.dependsOnDescription || null,
+          targetEnvironment: (extracted.targetEnvironment as any) || 'not_specified',
+          externalReferences: extracted.externalReferences,
+          rawQuote: extracted.rawQuote || null,
+          saidByResourceId: extracted.saidByResourceId && UUID_RE.test(extracted.saidByResourceId)
+            ? extracted.saidByResourceId
+            : null,
+          resourceTaskCompletionConfidence: (extracted.resourceTaskCompletionConfidence as any) || null,
+          isCarriedOver: extracted.isCarriedOver,
+          originalDeadlinePhrase: extracted.originalDeadlinePhrase || null,
+          resolvedDeadlineDate: extracted.resolvedDeadlineDate || null,
+          deadlineIsCompletion: extracted.deadlineIsCompletion,
+          resourceEstimatedHours: extracted.resourceEstimatedHours || null,
+          aiEstimatedHoursMin: extracted.aiEstimatedHoursMin || null,
+          aiEstimatedHoursMax: extracted.aiEstimatedHoursMax || null,
+          aiEstimateConfidence: (extracted.aiEstimateConfidence as any) || null,
+          aiEstimateReasoning: extracted.aiEstimateReasoning || null,
+          aiMatchConfidence: (extracted.matchConfidence as any) || null,
+          aiMatchReasoning: extracted.matchReasoning || null,
+          aiExtractionConfidence: (extracted.aiExtractionConfidence as any) || null,
           firstMentionedStandupId: standup.id,
+          lastMentionedStandupId: standup.id,
+          lastMentionedAt: body.standupDate,
+          standupMentionCount: 1,
         })
         .returning()
-      taskId = newTask.id
-    } else if (extracted.isCompleted) {
-      await db
-        .update(tasks)
-        .set({ status: 'completed', updatedAt: new Date() })
-        .where(eq(tasks.id, taskId))
-    }
 
-    const [existingAssignment] = await db
-      .select()
-      .from(projectResourceTasks)
-      .where(
-        and(
-          eq(projectResourceTasks.taskId, taskId),
-          eq(projectResourceTasks.resourceId, extracted.resourceId),
-          isNull(projectResourceTasks.deletedAt)
-        )
-      )
-      .limit(1)
-
-    if (existingAssignment) {
-      await db
-        .update(projectResourceTasks)
-        .set({
-          resolvedDeadlineDate: extracted.resolvedDeadlineDate || undefined,
-          resourceEstimatedHours: extracted.resourceEstimatedHours || undefined,
-          commitmentConfidence: extracted.commitmentConfidence || undefined,
-          completedAt: extracted.isCompleted ? new Date() : undefined,
-          updatedAt: new Date(),
-        })
-        .where(eq(projectResourceTasks.id, existingAssignment.id))
-    } else {
-      await db.insert(projectResourceTasks).values({
-        taskId,
-        resourceId: extracted.resourceId,
-        projectId: body.projectId,
-        resourceEstimatedHours: extracted.resourceEstimatedHours || null,
-        aiEstimatedHoursMin: extracted.aiEstimatedHoursMin || null,
-        aiEstimatedHoursMax: extracted.aiEstimatedHoursMax || null,
-        aiEstimateConfidence: extracted.aiEstimateConfidence || null,
-        aiEstimateReasoning: extracted.aiEstimateReasoning || null,
-        originalDeadlinePhrase: extracted.originalDeadlinePhrase || null,
-        resolvedDeadlineDate: extracted.resolvedDeadlineDate || null,
-        commitmentConfidence: extracted.commitmentConfidence || null,
-        completedAt: extracted.isCompleted ? new Date() : null,
+      // First history entry — AI created
+      await db.insert(taskHistory).values({
+        taskId: newTask.id,
+        standupId: standup.id,
+        actorLabel: 'AI',
+        changeType: 'ai_created',
+        note: `Task extracted by AI from standup on ${body.standupDate}`,
+        newValue: { title: newTask.title, description: newTask.description },
       })
-    }
 
-    // Save client member links for this task
-    for (const link of extracted.clientMemberLinks ?? []) {
-      const clientMemberId = clientMemberIdByName[link.clientMemberName.toLowerCase()]
-      if (!clientMemberId) continue
+      // Add primary assignee
+      if (extracted.resourceId && UUID_RE.test(extracted.resourceId)) {
+        await db
+          .insert(projectResourceTasks)
+          .values({
+            taskId: newTask.id,
+            resourceId: extracted.resourceId,
+            projectId: body.projectId,
+            addedByStandupId: standup.id,
+            completedAt: extracted.type === 'completed' ? new Date() : null,
+          })
+          .onConflictDoNothing()
 
-      await db
-        .insert(projectTaskClientAssignments)
-        .values({
-          taskId,
-          clientMemberId,
-          assignmentType: link.assignmentType,
-          sourceStandupId: standup.id,
+        await db.insert(taskHistory).values({
+          taskId: newTask.id,
+          standupId: standup.id,
+          actorLabel: 'AI',
+          changeType: 'assignee_added',
+          note: `Primary assignee set from standup extraction`,
+          newValue: { resourceId: extracted.resourceId },
         })
-        .onConflictDoNothing()
+
+        affectedResourceIds.add(extracted.resourceId)
+      }
+
+      // Add secondary assignees
+      for (const additionalId of extracted.additionalAssigneeIds ?? []) {
+        if (!UUID_RE.test(additionalId)) continue
+        await db
+          .insert(projectResourceTasks)
+          .values({
+            taskId: newTask.id,
+            resourceId: additionalId,
+            projectId: body.projectId,
+            addedByStandupId: standup.id,
+          })
+          .onConflictDoNothing()
+
+        await db.insert(taskHistory).values({
+          taskId: newTask.id,
+          standupId: standup.id,
+          actorLabel: 'AI',
+          changeType: 'assignee_added',
+          note: `Additional assignee added from standup extraction`,
+          newValue: { resourceId: additionalId },
+        })
+
+        affectedResourceIds.add(additionalId)
+      }
+
+      // Client member links
+      for (const link of extracted.clientMemberLinks ?? []) {
+        const clientMemberId = clientMemberIdByName[link.clientMemberName.toLowerCase()]
+        if (!clientMemberId) continue
+        await db
+          .insert(projectTaskClientAssignments)
+          .values({
+            taskId: newTask.id,
+            clientMemberId,
+            assignmentType: link.assignmentType,
+            sourceStandupId: standup.id,
+          })
+          .onConflictDoNothing()
+      }
+
+      // Embedding
+      await generateEmbeddingQueue.add('embed-task', {
+        entityType: 'task',
+        entityId: newTask.id,
+        projectId: body.projectId,
+        resourceId: extracted.resourceId,
+      })
+
+      // Also add existing task's resourceId to affected set for rollups
+      if (extracted.resourceId && UUID_RE.test(extracted.resourceId)) {
+        affectedResourceIds.add(extracted.resourceId)
+      }
     }
-
-    // Enqueue task embedding — one per (task, resource) pair
-    await generateEmbeddingQueue.add('embed-task', {
-      entityType: 'task',
-      entityId: taskId,
-      projectId: body.projectId,
-      resourceId: extracted.resourceId,
-    })
-
-    affectedResourceIds.add(extracted.resourceId)
   }
 
-  // Persist risks — insert no-risk sentinel if nothing was detected
+  // ── 5. Persist risks ───────────────────────────────────────────
   const risksToSave = body.extraction.risks.length > 0
     ? body.extraction.risks
     : [{
@@ -192,14 +362,13 @@ export default defineEventHandler(async (event) => {
         riskType: risk.riskType,
         projectId: risk.projectId || body.projectId,
         resourceId: risk.resourceId || null,
-        category: risk.category as 'missed_deadline' | 'frequent_slippage' | 'low_attendance' | 'vague_updates' | 'blocker_unresolved' | 'estimate_mismatch' | 'vague_commitment' | 'other',
+        category: risk.category as any,
         severity: risk.severity,
         title: risk.title,
         description: risk.description,
         aiReasoning: risk.aiReasoning,
         sourceStandupId: standup.id,
         sourceRawQuote: risk.sourceRawQuote || null,
-        // Sentinel records are pre-acknowledged so they don't pollute open risk counts
         status: 'isNoRiskSentinel' in risk && risk.isNoRiskSentinel ? 'acknowledged' : 'open',
       })
       .returning()
@@ -219,7 +388,152 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // Enqueue post-save jobs
+  // ── 6. Persist morale signals + auto-risks ────────────────────
+  const moraleData = body.extraction.morale
+  if (moraleData) {
+    // Build resource name map for denormalisation
+    const resourceNameMap: Record<string, string> = {}
+    for (const { resource } of await db
+      .select({ resource: resources })
+      .from(resources)
+      .where(inArray(resources.id,
+        moraleData.personSignals
+          .map((p) => p.resourceId)
+          .filter((id) => UUID_RE.test(id))
+      ))) {
+      resourceNameMap[resource.id] = resource.name
+    }
+
+    // Insert per-person rows
+    for (const person of moraleData.personSignals) {
+      if (!UUID_RE.test(person.resourceId)) continue
+      await db.insert(standupMoraleSignals).values({
+        standupId: standup.id,
+        projectId: body.projectId,
+        resourceId: person.resourceId,
+        resourceName: resourceNameMap[person.resourceId] ?? null,
+        sentiment: person.sentiment,
+        engagementLevel: person.engagementLevel,
+        workloadSignal: person.workloadSignal,
+        stressSignal: person.stressSignal,
+        signals: person.signals,
+        rawQuotes: person.rawQuotes,
+      })
+
+      // Auto-risk: check last 3 standups for sustained negative patterns
+      const MORALE_RISK_THRESHOLD = 3
+      const recentPersonSignals = await db
+        .select({
+          stressSignal: standupMoraleSignals.stressSignal,
+          sentiment: standupMoraleSignals.sentiment,
+          engagementLevel: standupMoraleSignals.engagementLevel,
+        })
+        .from(standupMoraleSignals)
+        .where(and(
+          eq(standupMoraleSignals.projectId, body.projectId),
+          eq(standupMoraleSignals.resourceId, person.resourceId),
+        ))
+        .orderBy(desc(standupMoraleSignals.createdAt))
+        .limit(MORALE_RISK_THRESHOLD)
+
+      // Include today's signal in the check
+      const allSignals = [
+        { stressSignal: person.stressSignal, sentiment: person.sentiment, engagementLevel: person.engagementLevel },
+        ...recentPersonSignals,
+      ].slice(0, MORALE_RISK_THRESHOLD)
+
+      if (allSignals.length >= MORALE_RISK_THRESHOLD) {
+        const sustainedHighStress = allSignals.every((s) => s.stressSignal === 'high' || s.stressSignal === 'moderate')
+        const sustainedNegative = allSignals.every((s) => s.sentiment === 'negative')
+        const sustainedLowEngagement = allSignals.every((s) => s.engagementLevel === 'low')
+
+        if (sustainedHighStress || sustainedNegative || sustainedLowEngagement) {
+          // Only raise if no open morale risk already exists for this resource
+          const [existingMoraleRisk] = await db
+            .select({ id: risks.id })
+            .from(risks)
+            .where(and(
+              eq(risks.resourceId, person.resourceId),
+              eq(risks.category, 'sustained_low_morale'),
+              eq(risks.status, 'open'),
+              isNull(risks.deletedAt),
+            ))
+            .limit(1)
+
+          if (!existingMoraleRisk) {
+            const reason = sustainedHighStress
+              ? 'sustained high stress signals'
+              : sustainedNegative
+                ? 'sustained negative sentiment'
+                : 'sustained low engagement'
+            const [savedMoraleRisk] = await db.insert(risks).values({
+              riskType: 'resource',
+              projectId: body.projectId,
+              resourceId: person.resourceId,
+              category: 'sustained_low_morale',
+              severity: sustainedHighStress ? 'high' : 'medium',
+              title: `Sustained low morale — ${resourceNameMap[person.resourceId] ?? person.resourceId}`,
+              description: `${resourceNameMap[person.resourceId] ?? 'A team member'} has shown ${reason} across the last ${MORALE_RISK_THRESHOLD} standups.`,
+              aiReasoning: `Pattern detected: ${reason} for ${MORALE_RISK_THRESHOLD} consecutive standups. Recommend a 1:1 check-in.`,
+              sourceStandupId: standup.id,
+              status: 'open',
+            }).returning()
+
+            if (savedMoraleRisk.severity === 'high') {
+              await sendNotificationEmailQueue.add('risk-alert', {
+                riskId: savedMoraleRisk.id,
+                severity: savedMoraleRisk.severity,
+              })
+            }
+          }
+        }
+      }
+    }
+
+    // Insert team-summary row (resource_id null)
+    const ts = moraleData.teamSummary
+    await db.insert(standupMoraleSignals).values({
+      standupId: standup.id,
+      projectId: body.projectId,
+      resourceId: null,
+      overallTeamSentiment: ts.overallTeamSentiment,
+      teamEnergy: ts.teamEnergy,
+      collaborationSignal: ts.collaborationSignal,
+      tensionSignal: ts.tensionSignal,
+      aiObservation: ts.aiObservation,
+    })
+
+    // Auto-risk: team tension
+    if (ts.tensionSignal === 'notable') {
+      const [existingTensionRisk] = await db
+        .select({ id: risks.id })
+        .from(risks)
+        .where(and(
+          eq(risks.projectId, body.projectId),
+          eq(risks.category, 'team_tension'),
+          eq(risks.status, 'open'),
+          isNull(risks.deletedAt),
+        ))
+        .limit(1)
+
+      if (!existingTensionRisk) {
+        await db.insert(risks).values({
+          riskType: 'project',
+          projectId: body.projectId,
+          resourceId: null,
+          category: 'team_tension',
+          severity: 'medium',
+          title: 'Team tension detected in standup',
+          description: `Notable tension or conflict signals were observed in the standup on ${body.standupDate}.`,
+          aiReasoning: ts.aiObservation,
+          sourceStandupId: standup.id,
+          status: 'open',
+        })
+      }
+    }
+  }
+
+  // ── 7. Post-save jobs ──────────────────────────────────────────
   await generateEmbeddingQueue.add('embed-standup', {
     entityType: 'standup',
     entityId: standup.id,

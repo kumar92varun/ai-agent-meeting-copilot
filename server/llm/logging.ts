@@ -70,6 +70,13 @@ export async function invokeSingleStructured<T>(
     const raw = output.raw as { usage_metadata?: { input_tokens?: number; output_tokens?: number } }
     tokensIn = raw.usage_metadata?.input_tokens ?? 0
     tokensOut = raw.usage_metadata?.output_tokens ?? 0
+
+    if (output.parsed == null) {
+      throw new Error(
+        `[${options.nodeName}] LLM returned null parsed output. The model likely failed structured output validation. Raw response: ${JSON.stringify((output.raw as { content?: unknown })?.content ?? '').slice(0, 500)}`
+      )
+    }
+
     result = output.parsed as T
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err)

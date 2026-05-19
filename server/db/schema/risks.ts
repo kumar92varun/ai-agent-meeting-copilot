@@ -12,6 +12,8 @@ export const riskCategoryEnum = pgEnum('risk_category', [
   'blocker_unresolved',
   'estimate_mismatch',
   'vague_commitment',
+  'sustained_low_morale',
+  'team_tension',
   'other',
 ])
 export const riskSeverityEnum = pgEnum('risk_severity', ['low', 'medium', 'high', 'critical'])

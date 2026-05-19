@@ -1,5 +1,5 @@
 import { getDb } from '../db/client'
-import { tasks, projectResourceTasks, risks } from '../db/schema'
+import { tasks, risks } from '../db/schema'
 import { eq, and, isNull, lte, ne } from 'drizzle-orm'
 import { todayDateIST } from '../utils/dates'
 import { logger } from '../utils/logger'
@@ -8,41 +8,35 @@ export async function checkDeadlineCompletions() {
   const db = getDb()
   const today = todayDateIST()
 
-  // Find tasks past their deadline that are not yet completed/cancelled
-  const overdueAssignments = await db
+  const overdueTasks = await db
     .select({
-      taskId: projectResourceTasks.taskId,
-      projectId: projectResourceTasks.projectId,
-      resourceId: projectResourceTasks.resourceId,
-      resolvedDeadlineDate: projectResourceTasks.resolvedDeadlineDate,
-      timesExtended: projectResourceTasks.timesDeadlineExtended,
+      id: tasks.id,
+      projectId: tasks.projectId,
+      resolvedDeadlineDate: tasks.resolvedDeadlineDate,
+      timesSlipped: tasks.timesSlipped,
     })
-    .from(projectResourceTasks)
-    .innerJoin(tasks, eq(projectResourceTasks.taskId, tasks.id))
+    .from(tasks)
     .where(
       and(
-        isNull(projectResourceTasks.deletedAt),
         isNull(tasks.deletedAt),
         ne(tasks.status, 'completed'),
         ne(tasks.status, 'cancelled'),
-        lte(projectResourceTasks.resolvedDeadlineDate, today)
+        lte(tasks.resolvedDeadlineDate, today)
       )
     )
 
-  for (const assignment of overdueAssignments) {
-    // Mark task as overdue
+  for (const task of overdueTasks) {
     await db
       .update(tasks)
       .set({ status: 'overdue', updatedAt: new Date() })
-      .where(eq(tasks.id, assignment.taskId))
+      .where(eq(tasks.id, task.id))
 
-    // Raise a missed_deadline risk if not already raised
     const existingRisk = await db
       .select()
       .from(risks)
       .where(
         and(
-          eq(risks.resourceId, assignment.resourceId),
+          eq(risks.projectId, task.projectId),
           eq(risks.category, 'missed_deadline'),
           eq(risks.status, 'open'),
           isNull(risks.deletedAt)
@@ -52,20 +46,20 @@ export async function checkDeadlineCompletions() {
 
     if (!existingRisk.length) {
       await db.insert(risks).values({
-        riskType: 'resource',
-        projectId: assignment.projectId,
-        resourceId: assignment.resourceId,
+        riskType: 'project',
+        projectId: task.projectId,
+        resourceId: null,
         category: 'missed_deadline',
-        severity: assignment.timesExtended >= 2 ? 'high' : 'medium',
+        severity: task.timesSlipped >= 2 ? 'high' : 'medium',
         title: 'Task deadline missed',
-        description: `Task (id: ${assignment.taskId}) passed its deadline of ${assignment.resolvedDeadlineDate} without being completed.`,
-        aiReasoning: `Automated check: task deadline ${assignment.resolvedDeadlineDate} passed with no completion recorded. Extended ${assignment.timesExtended} time(s) previously.`,
+        description: `Task (id: ${task.id}) passed its deadline of ${task.resolvedDeadlineDate} without being completed.`,
+        aiReasoning: `Automated check: deadline ${task.resolvedDeadlineDate} passed. Slipped ${task.timesSlipped} time(s) previously.`,
         status: 'open',
       })
     }
 
-    logger.info({ taskId: assignment.taskId }, 'Marked task as overdue')
+    logger.info({ taskId: task.id }, 'Marked task as overdue')
   }
 
-  logger.info({ count: overdueAssignments.length }, 'Deadline completion check done')
+  logger.info({ count: overdueTasks.length }, 'Deadline completion check done')
 }

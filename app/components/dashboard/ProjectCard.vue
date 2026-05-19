@@ -9,37 +9,39 @@ defineProps<{
 
 <template>
   <NuxtLink :to="`/projects/${project.id}`" class="block group">
-    <UCard class="hover:shadow-md transition-shadow cursor-pointer h-full group-hover:border-blue-200">
-      <div class="flex items-start justify-between mb-3">
-        <div class="min-w-0 flex-1 mr-2">
-          <h3 class="font-semibold text-gray-900 truncate">{{ project.name }}</h3>
+    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 h-full hover:shadow-md hover:border-indigo-100 transition-all duration-200 cursor-pointer">
+      <div class="flex items-start justify-between mb-4">
+        <div class="min-w-0 flex-1 mr-3">
+          <h3 class="font-semibold text-slate-900 truncate group-hover:text-indigo-700 transition-colors">
+            {{ project.name }}
+          </h3>
         </div>
         <UiHealthBadge :score="project.metrics?.healthScore" />
       </div>
 
-      <div v-if="project.metrics" class="grid grid-cols-3 gap-2 text-center border-t border-gray-100 pt-3">
+      <div v-if="project.metrics" class="grid grid-cols-3 gap-2 border-t border-slate-50 pt-4 text-center">
         <div>
-          <p class="text-xl font-bold" :class="project.metrics.openRisksCount > 0 ? 'text-red-500' : 'text-gray-400'">
+          <p class="text-lg font-bold" :class="project.metrics.openRisksCount > 0 ? 'text-rose-500' : 'text-slate-300'">
             {{ project.metrics.openRisksCount }}
           </p>
-          <p class="text-xs text-gray-400">Risks</p>
+          <p class="text-xs text-slate-400 mt-0.5">Risks</p>
         </div>
         <div>
-          <p class="text-xl font-bold" :class="project.metrics.overdueTasksCount > 0 ? 'text-orange-500' : 'text-gray-400'">
+          <p class="text-lg font-bold" :class="project.metrics.overdueTasksCount > 0 ? 'text-amber-500' : 'text-slate-300'">
             {{ project.metrics.overdueTasksCount }}
           </p>
-          <p class="text-xs text-gray-400">Overdue</p>
+          <p class="text-xs text-slate-400 mt-0.5">Overdue</p>
         </div>
         <div>
-          <p class="text-xl font-bold text-green-600">
+          <p class="text-lg font-bold text-emerald-500">
             {{ formatPct(project.metrics.attendanceRate) }}
           </p>
-          <p class="text-xs text-gray-400">Attendance</p>
+          <p class="text-xs text-slate-400 mt-0.5">Attendance</p>
         </div>
       </div>
-      <div v-else class="text-center text-xs text-gray-400 pt-3 border-t border-gray-100">
-        No metrics yet — ingest a standup to generate
+      <div v-else class="text-center text-xs text-slate-300 pt-4 border-t border-slate-50">
+        No standup data yet
       </div>
-    </UCard>
+    </div>
   </NuxtLink>
 </template>

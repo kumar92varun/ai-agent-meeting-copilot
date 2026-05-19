@@ -6,12 +6,14 @@ const color = computed(() => {
     critical: 'red',
     high: 'orange',
     medium: 'yellow',
-    low: 'blue',
+    low: 'indigo',
   }
   return (map[props.severity] ?? 'gray') as any
 })
 </script>
 
 <template>
-  <UBadge :color="color" variant="subtle" class="uppercase text-xs">{{ severity }}</UBadge>
+  <UBadge :color="color" variant="subtle" class="uppercase text-xs font-semibold tracking-wide">
+    {{ severity }}
+  </UBadge>
 </template>

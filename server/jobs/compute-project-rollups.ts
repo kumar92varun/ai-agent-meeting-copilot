@@ -1,12 +1,12 @@
 import { getDb } from '../db/client'
-import { standups, tasks, projectResourceTasks, risks, standupUpdates, dailyMetricsProject } from '../db/schema'
-import { eq, and, isNull, gte, lte, count, avg, sql } from 'drizzle-orm'
+import { standups, tasks, risks, standupUpdates, dailyMetricsProject } from '../db/schema'
+import { eq, and, isNull, count, avg } from 'drizzle-orm'
 import { todayDateIST } from '../utils/dates'
 import { logger } from '../utils/logger'
 
 export interface ComputeProjectRollupsPayload {
   projectId: string
-  date?: string // ISO date; defaults to today IST
+  date?: string
 }
 
 export async function computeProjectRollups(payload: ComputeProjectRollupsPayload) {
@@ -36,7 +36,6 @@ export async function computeProjectRollups(payload: ComputeProjectRollupsPayloa
     .from(standups)
     .where(and(eq(standups.projectId, projectId), eq(standups.standupDate, metricDate), isNull(standups.deletedAt)))
 
-  // Attendance rate: attended / total for this date
   const attendanceData = await db
     .select({ attended: standupUpdates.attended })
     .from(standupUpdates)
@@ -47,18 +46,17 @@ export async function computeProjectRollups(payload: ComputeProjectRollupsPayloa
   const attendedCount = attendanceData.filter((r) => r.attended).length
   const attendanceRate = totalMembers > 0 ? attendedCount / totalMembers : 0
 
-  // Average slippage from project_resource_tasks
+  // Slippage now lives on project_tasks
   const slippageData = await db
-    .select({ slippage: projectResourceTasks.totalDaysSlipped })
-    .from(projectResourceTasks)
-    .where(and(eq(projectResourceTasks.projectId, projectId), isNull(projectResourceTasks.deletedAt)))
+    .select({ slippage: tasks.totalDaysSlipped })
+    .from(tasks)
+    .where(and(eq(tasks.projectId, projectId), isNull(tasks.deletedAt)))
 
   const avgSlippage =
     slippageData.length > 0
       ? slippageData.reduce((sum, r) => sum + (r.slippage || 0), 0) / slippageData.length
       : 0
 
-  // Health score: simple weighted formula
   const healthScore = Math.max(
     0,
     100 -

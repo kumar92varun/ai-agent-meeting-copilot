@@ -43,6 +43,26 @@ interface StandupClientMember {
   inferredRole: string | null
 }
 
+interface MoralePersonRow {
+  id: string
+  resourceId: string
+  resourceName: string | null
+  sentiment: string
+  engagementLevel: string
+  workloadSignal: string
+  stressSignal: string
+  signals: string[] | null
+  rawQuotes: string[] | null
+}
+
+interface MoraleTeamRow {
+  overallTeamSentiment: string
+  teamEnergy: string
+  collaborationSignal: string
+  tensionSignal: string
+  aiObservation: string | null
+}
+
 interface StandupDetail {
   id: string
   projectId: string
@@ -58,6 +78,7 @@ interface StandupDetail {
   tasks: StandupTask[]
   risks: StandupRisk[]
   clientMembers: StandupClientMember[]
+  morale: { personSignals: MoralePersonRow[]; teamSummary: MoraleTeamRow | null }
 }
 
 const route = useRoute()
@@ -227,6 +248,80 @@ const visibleRisks = computed(() =>
         icon="i-heroicons-check-circle"
         title="No risks detected"
         description="Clean standup — nothing flagged."
+      />
+    </UCard>
+
+    <!-- Morale Signals -->
+    <UCard class="mb-6">
+      <h2 class="font-semibold text-gray-800 mb-4">
+        Team Morale Signals
+        <span class="text-gray-400 font-normal ml-1">({{ standup?.morale?.personSignals?.length ?? 0 }} members)</span>
+      </h2>
+      <div v-if="standup?.morale?.personSignals?.length" class="space-y-4">
+        <div
+          v-for="person in standup.morale.personSignals"
+          :key="person.id"
+          class="rounded-xl border border-slate-100 p-4 space-y-3"
+        >
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <span class="font-medium text-slate-800">{{ person.resourceName ?? person.resourceId }}</span>
+            <span :class="[
+              'text-xs font-semibold px-2.5 py-0.5 rounded-full border capitalize',
+              person.sentiment === 'positive' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+              person.sentiment === 'negative' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+              person.sentiment === 'mixed'    ? 'bg-amber-50 text-amber-700 border-amber-200' :
+              'bg-slate-50 text-slate-600 border-slate-200'
+            ]">{{ person.sentiment }}</span>
+          </div>
+          <div class="flex flex-wrap gap-2 text-xs">
+            <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 capitalize">{{ person.engagementLevel }} engagement</span>
+            <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 capitalize">{{ person.workloadSignal }}</span>
+            <span :class="[
+              'px-2 py-0.5 rounded capitalize',
+              person.stressSignal === 'high' || person.stressSignal === 'moderate' ? 'bg-rose-50 text-rose-600' : 'bg-slate-100 text-slate-500'
+            ]">Stress: {{ person.stressSignal }}</span>
+          </div>
+          <ul v-if="person.signals?.length" class="space-y-0.5">
+            <li v-for="(sig, idx) in person.signals" :key="idx" class="flex items-start gap-1.5 text-xs text-slate-600">
+              <UIcon name="i-heroicons-chevron-right" class="w-3 h-3 text-slate-300 mt-0.5 flex-shrink-0" />
+              {{ sig }}
+            </li>
+          </ul>
+        </div>
+
+        <!-- Team summary -->
+        <div v-if="standup.morale.teamSummary" class="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4 space-y-3">
+          <p class="text-xs font-semibold text-indigo-600 uppercase tracking-wide">Team summary</p>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div>
+              <p class="text-slate-400 mb-0.5">Sentiment</p>
+              <p class="font-medium text-slate-700 capitalize">{{ standup.morale.teamSummary.overallTeamSentiment }}</p>
+            </div>
+            <div>
+              <p class="text-slate-400 mb-0.5">Energy</p>
+              <p class="font-medium text-slate-700 capitalize">{{ standup.morale.teamSummary.teamEnergy }}</p>
+            </div>
+            <div>
+              <p class="text-slate-400 mb-0.5">Collaboration</p>
+              <p class="font-medium text-slate-700 capitalize">{{ standup.morale.teamSummary.collaborationSignal }}</p>
+            </div>
+            <div>
+              <p class="text-slate-400 mb-0.5">Tension</p>
+              <p :class="['font-medium capitalize', standup.morale.teamSummary.tensionSignal === 'notable' ? 'text-rose-600' : 'text-slate-700']">
+                {{ standup.morale.teamSummary.tensionSignal }}
+              </p>
+            </div>
+          </div>
+          <p v-if="standup.morale.teamSummary.aiObservation" class="text-xs text-indigo-700 leading-relaxed">
+            {{ standup.morale.teamSummary.aiObservation }}
+          </p>
+        </div>
+      </div>
+      <UiEmptyState
+        v-else
+        icon="i-heroicons-face-smile"
+        title="No morale signals recorded"
+        description="Morale signals are captured from standup transcripts."
       />
     </UCard>
 

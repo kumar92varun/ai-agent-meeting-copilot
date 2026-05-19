@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { Project } from '#shared/types/domain'
-import type { AttendanceRow, ExtractedTask, ExtractedRisk, IdentifiedClientMember } from '#shared/types/api'
+import type { AttendanceRow, ExtractedTask, ExtractedRisk, IdentifiedClientMember, ExtractedMorale } from '#shared/types/api'
+
+interface ResourceItem { id: string; name: string; resourceType: string }
 
 definePageMeta({ middleware: ['role'] })
 
@@ -18,16 +20,24 @@ const form = reactive({
   transcript: '',
 })
 
+// Loaded when a project is selected — for the assignee dropdowns in TaskReview
+const projectResources = ref<ResourceItem[]>([])
+watch(() => form.projectId, async (id) => {
+  if (!id) return
+  projectResources.value = await $fetch<ResourceItem[]>(`/api/projects/${id}/resources`).catch(() => [])
+}, { immediate: true })
+
 // SSE analysis state
 const progressNodes = ref<string[]>([])
 const analysisError = ref('')
 const rawExtraction = ref<Record<string, unknown> | null>(null)
 
-// Editable review state — typed properly
+// Editable review state
 const reviewAttendance = ref<AttendanceRow[]>([])
 const reviewTasks = ref<ExtractedTask[]>([])
 const reviewRisks = ref<ExtractedRisk[]>([])
 const reviewClientMembers = ref<IdentifiedClientMember[]>([])
+const reviewMorale = ref<ExtractedMorale | null>(null)
 
 async function analyze() {
   if (!form.projectId || !form.transcript.trim()) {
@@ -59,7 +69,6 @@ async function analyze() {
 
   const reader = response.body!.getReader()
   const decoder = new TextDecoder()
-  // Buffer partial lines across chunks
   let buffer = ''
 
   try {
@@ -69,7 +78,6 @@ async function analyze() {
 
       buffer += decoder.decode(value, { stream: true })
       const lines = buffer.split('\n')
-      // Keep the last (potentially incomplete) line in the buffer
       buffer = lines.pop() ?? ''
 
       for (const line of lines) {
@@ -84,7 +92,7 @@ async function analyze() {
             reviewTasks.value = event.data.tasks ?? []
             reviewRisks.value = event.data.risks ?? []
             reviewClientMembers.value = event.data.identifiedClientMembers ?? []
-            // Only move to review if at least some data came back
+            reviewMorale.value = event.data.morale ?? null
             if (
               reviewAttendance.value.length > 0 ||
               reviewTasks.value.length > 0 ||
@@ -124,6 +132,7 @@ async function save() {
           tasks: reviewTasks.value,
           risks: reviewRisks.value,
           identifiedClientMembers: reviewClientMembers.value,
+          morale: reviewMorale.value ?? { personSignals: [], teamSummary: { overallTeamSentiment: 'neutral', teamEnergy: 'medium', collaborationSignal: 'neutral', tensionSignal: 'none', aiObservation: '' } },
         },
       },
     })
@@ -138,13 +147,22 @@ async function save() {
 const projectOptions = computed(() =>
   (projects.value ?? []).map((p) => ({ label: p.name, value: p.id }))
 )
+
+const findingsSummary = computed(() => {
+  const parts = []
+  if (reviewAttendance.value.length) parts.push(`${reviewAttendance.value.length} members`)
+  if (reviewTasks.value.length) parts.push(`${reviewTasks.value.length} tasks`)
+  if (reviewRisks.value.length) parts.push(`${reviewRisks.value.length} risk${reviewRisks.value.length !== 1 ? 's' : ''}`)
+  if (reviewClientMembers.value.length) parts.push(`${reviewClientMembers.value.length} client member${reviewClientMembers.value.length !== 1 ? 's' : ''}`)
+  return parts.join(' · ')
+})
 </script>
 
 <template>
-  <div class="p-4 md:p-8 max-w-4xl mx-auto">
+  <div class="p-6 md:p-8 max-w-4xl mx-auto">
     <UiPageHeader
       title="New Standup"
-      subtitle="Paste transcript, analyze, review, and save"
+      subtitle="Paste transcript, analyze, review, then confirm to save"
     />
 
     <!-- Step 1: Input -->
@@ -190,25 +208,50 @@ const projectOptions = computed(() =>
     </div>
 
     <!-- Step 3: Review -->
-    <div v-else-if="step === 'review'" class="space-y-6">
+    <div v-else-if="step === 'review'" class="space-y-5 pb-36">
+      <!-- Section header — no save button here -->
       <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-gray-800">Review Extraction</h2>
-        <div class="flex gap-2">
-          <UButton color="gray" variant="outline" size="sm" @click="step = 'input'">Re-analyze</UButton>
-          <UButton size="sm" @click="save">Save Standup</UButton>
+        <div>
+          <h2 class="text-lg font-semibold text-slate-800">Review AI Findings</h2>
+          <p class="text-sm text-slate-400 mt-0.5">Check everything below before confirming. You can edit task titles inline.</p>
         </div>
+        <UButton color="gray" variant="outline" size="sm" @click="step = 'input'">
+          <UIcon name="i-heroicons-arrow-path" class="w-3.5 h-3.5 mr-1.5" />
+          Re-analyze
+        </UButton>
       </div>
 
       <StandupsAttendanceReview v-model="reviewAttendance" />
       <StandupsClientMembersReview :members="reviewClientMembers" />
-      <StandupsTaskReview v-model="reviewTasks" />
+      <StandupsTaskReview v-model="reviewTasks" :resource-list="projectResources" />
       <StandupsRiskReview :risks="reviewRisks" />
+      <StandupsMoraleReview v-if="reviewMorale" :morale="reviewMorale" :resource-list="projectResources" />
+
+      <!-- Sticky bottom confirmation bar -->
+      <div class="fixed bottom-0 left-0 right-0 lg:left-64 z-20 bg-white/90 backdrop-blur border-t border-slate-200 shadow-lg">
+        <div class="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+          <div>
+            <p class="text-sm font-semibold text-slate-700">Ready to save?</p>
+            <p class="text-xs text-slate-400 mt-0.5">{{ findingsSummary }} will be written to the database.</p>
+          </div>
+          <div class="flex items-center gap-3 flex-shrink-0">
+            <UButton color="gray" variant="outline" size="sm" @click="step = 'input'">
+              Discard
+            </UButton>
+            <UButton size="md" @click="save">
+              <UIcon name="i-heroicons-check-circle" class="w-4 h-4 mr-1.5" />
+              Confirm & Save
+            </UButton>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Step: Saving -->
-    <div v-else-if="step === 'saving'" class="text-center py-16">
-      <div class="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-      <p class="text-gray-500">Saving standup…</p>
+    <div v-else-if="step === 'saving'" class="text-center py-20">
+      <div class="w-10 h-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+      <p class="text-slate-500 font-medium">Saving standup…</p>
+      <p class="text-xs text-slate-400 mt-1">Writing findings to the database</p>
     </div>
   </div>
 </template>
