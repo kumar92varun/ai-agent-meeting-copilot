@@ -48,6 +48,39 @@ export async function invokeStructured<TOut extends Record<string, unknown>, TIn
   return items
 }
 
+/**
+ * Like invokeStructured but for a single object output (not an array).
+ * Use when the LLM should return one top-level object rather than a list of items.
+ */
+export async function invokeSingleStructured<T>(
+  model: BaseChatModel,
+  schema: z.ZodType<T>,
+  messages: BaseMessage[],
+  options: LlmCallOptions
+): Promise<T> {
+  const chain = model.withStructuredOutput(schema, { includeRaw: true })
+
+  const start = Date.now()
+  let result: T
+  let tokensIn = 0
+  let tokensOut = 0
+
+  try {
+    const output = await chain.invoke(messages)
+    const raw = output.raw as { usage_metadata?: { input_tokens?: number; output_tokens?: number } }
+    tokensIn = raw.usage_metadata?.input_tokens ?? 0
+    tokensOut = raw.usage_metadata?.output_tokens ?? 0
+    result = output.parsed as T
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err)
+    await writeLog(options, 0, 0, Date.now() - start, error)
+    throw err
+  }
+
+  await writeLog(options, tokensIn, tokensOut, Date.now() - start)
+  return result
+}
+
 async function writeLog(
   options: LlmCallOptions,
   tokensIn: number,

@@ -10,7 +10,6 @@ import {
 import { and, eq, isNull } from 'drizzle-orm'
 import { buildStandupGraph } from '../../agents/standup-graph'
 import type { StandupGraphState } from '../../agents/standup-graph'
-import type { ExtractedTaskItem, MatchResultItem, DeadlineResolution, HourEstimate } from '../../agents/schemas'
 import { getLlmMeta } from '../../llm'
 import { z } from 'zod'
 
@@ -21,13 +20,7 @@ const AnalyzeSchema = z.object({
 })
 
 const NODE_LABELS: Record<string, string> = {
-  'parse-transcript': 'Parsing transcript…',
-  'infer-attendance': 'Inferring attendance…',
-  'extract-tasks': 'Extracting tasks…',
-  'match-existing-tasks': 'Matching existing tasks…',
-  'resolve-deadlines': 'Resolving deadlines…',
-  'estimate-hours': 'Estimating hours…',
-  'detect-risks': 'Detecting risks…',
+  'analyze-standup': 'Analyzing standup…',
 }
 
 export default defineEventHandler(async (event) => {
@@ -99,8 +92,6 @@ export default defineEventHandler(async (event) => {
   const startTime = Date.now()
 
   try {
-    // Use graph.stream() with streamMode "values" so we get the full state
-    // after each node completes, letting us send SSE progress events in real-time.
     const stream = await graph.stream(
       {
         projectId,
@@ -120,7 +111,6 @@ export default defineEventHandler(async (event) => {
     for await (const state of stream) {
       finalState = state as StandupGraphState
 
-      // Emit a progress event for each newly completed node
       const completed = finalState.completedNodes ?? []
       for (let i = lastCompletedCount; i < completed.length; i++) {
         const nodeName = completed[i]
@@ -129,52 +119,72 @@ export default defineEventHandler(async (event) => {
       lastCompletedCount = completed.length
     }
 
-    if (!finalState) {
+    if (!finalState?.analysis) {
       send({ type: 'error', error: 'Graph produced no output' })
       send({ type: 'done' })
       res.end()
       return
     }
 
-    // Surface any per-node errors that were swallowed by withProgress
     if (Object.keys(finalState.errors ?? {}).length > 0) {
       send({ type: 'error', error: JSON.stringify(finalState.errors) })
     }
 
+    const { analysis } = finalState
     const processingMs = Date.now() - startTime
+
+    // Flatten task-level risks into the top-level risks array expected by the save endpoint.
+    // Task risks become resource-scoped risks; standalone risks pass through as-is.
+    const taskRisks = analysis.tasks.flatMap((t) =>
+      t.risks.map((r) => ({
+        riskType: 'resource' as const,
+        projectId: projectId,
+        resourceId: t.resourceId,
+        category: r.category,
+        severity: r.severity,
+        title: r.title,
+        description: r.description,
+        aiReasoning: r.aiReasoning,
+        sourceRawQuote: r.sourceRawQuote,
+      }))
+    )
+
+    const standaloneRisks = analysis.risks.map((r) => ({
+      riskType: r.riskType,
+      projectId: projectId,
+      resourceId: r.resourceId,
+      category: r.category,
+      severity: r.severity,
+      title: r.title,
+      description: r.description,
+      aiReasoning: r.aiReasoning,
+      sourceRawQuote: r.sourceRawQuote,
+    }))
 
     send({
       type: 'result',
       data: {
-        attendance: finalState.attendance,
-        identifiedClientMembers: finalState.identifiedClientMembers,
-        tasks: finalState.extractedTasks.map((t: ExtractedTaskItem, i: number) => {
-          const matchResult = finalState!.matchResults.find((m: MatchResultItem) => m.extractedIndex === i)
-          const deadlineRes = finalState!.deadlineResolutions.find(
-            (d: DeadlineResolution) => d.originalPhrase === t.deadlinePhrase
-          )
-          const hourEst = finalState!.hourEstimates.find((h: HourEstimate) => h.taskIndex === i)
-
-          return {
-            existingTaskId: matchResult?.existingTaskId ?? null,
-            title: t.title,
-            description: t.description,
-            resourceId: t.resourceId,
-            resolvedDeadlineDate: deadlineRes?.resolvedDate ?? null,
-            originalDeadlinePhrase: t.deadlinePhrase,
-            resourceEstimatedHours: t.estimatedHours,
-            aiEstimatedHoursMin: hourEst?.aiEstimatedHoursMin ?? null,
-            aiEstimatedHoursMax: hourEst?.aiEstimatedHoursMax ?? null,
-            aiEstimateConfidence: hourEst?.aiEstimateConfidence ?? null,
-            aiEstimateReasoning: hourEst?.aiEstimateReasoning ?? null,
-            commitmentConfidence: t.commitmentConfidence,
-            isCompleted: t.type === 'completed',
-            isCarriedOver: t.isCarriedOver,
-            rawQuote: t.rawQuote,
-            clientMemberLinks: t.clientMemberLinks,
-          }
-        }),
-        risks: finalState.detectedRisks,
+        attendance: analysis.attendance,
+        identifiedClientMembers: analysis.clientTeamMembers,
+        tasks: analysis.tasks.map((t) => ({
+          existingTaskId: t.existingTaskId ?? null,
+          title: t.title,
+          description: t.description,
+          resourceId: t.resourceId,
+          resolvedDeadlineDate: t.resolvedDeadline ?? null,
+          originalDeadlinePhrase: t.deadlinePhrase ?? null,
+          resourceEstimatedHours: t.resourceEstimatedHours ?? null,
+          aiEstimatedHoursMin: t.aiEstimatedHoursMin ?? null,
+          aiEstimatedHoursMax: t.aiEstimatedHoursMax ?? null,
+          aiEstimateConfidence: t.aiEstimateConfidence ?? null,
+          aiEstimateReasoning: t.aiEstimateReasoning ?? null,
+          commitmentConfidence: t.commitmentConfidence,
+          isCompleted: t.type === 'completed',
+          isCarriedOver: t.isCarriedOver,
+          rawQuote: t.rawQuote,
+          clientMemberLinks: t.clientMemberLinks,
+        })),
+        risks: [...taskRisks, ...standaloneRisks],
         llmModelUsed: modelId,
         tokensIn: 0,
         tokensOut: 0,

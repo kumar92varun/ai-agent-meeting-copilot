@@ -1,21 +1,6 @@
 import { StateGraph, START, END, Annotation } from '@langchain/langgraph'
-import type {
-  SpeakerSegment,
-  ClientTeamMemberItem,
-  AttendanceItem,
-  ExtractedTaskItem,
-  MatchResultItem,
-  DeadlineResolution,
-  HourEstimate,
-  ExtractedRisk,
-} from './schemas'
-import { parseTranscriptNode } from './nodes/parse-transcript'
-import { inferAttendanceNode } from './nodes/infer-attendance'
-import { extractTasksNode } from './nodes/extract-tasks'
-import { matchExistingTasksNode } from './nodes/match-existing-tasks'
-import { resolveDeadlinesNode } from './nodes/resolve-deadlines'
-import { estimateHoursNode } from './nodes/estimate-hours'
-import { detectRisksNode } from './nodes/detect-risks'
+import type { StandupAnalysis } from './schemas'
+import { analyzeStandupNode } from './nodes/analyze-standup'
 
 const StandupAnnotation = Annotation.Root({
   // Inputs
@@ -36,18 +21,10 @@ const StandupAnnotation = Annotation.Root({
     Record<string, Array<{ id: string; title: string; description: string | null; status: string }>>
   >({ reducer: (_, v) => v, default: () => ({}) }),
 
-  // Node outputs
-  speakerSegments: Annotation<SpeakerSegment[]>({ reducer: (_, v) => v, default: () => [] }),
-  identifiedClientMembers: Annotation<ClientTeamMemberItem[]>({ reducer: (_, v) => v, default: () => [] }),
-  fathomActionItems: Annotation<string[]>({ reducer: (_, v) => v, default: () => [] }),
-  attendance: Annotation<AttendanceItem[]>({ reducer: (_, v) => v, default: () => [] }),
-  extractedTasks: Annotation<ExtractedTaskItem[]>({ reducer: (_, v) => v, default: () => [] }),
-  matchResults: Annotation<MatchResultItem[]>({ reducer: (_, v) => v, default: () => [] }),
-  deadlineResolutions: Annotation<DeadlineResolution[]>({ reducer: (_, v) => v, default: () => [] }),
-  hourEstimates: Annotation<HourEstimate[]>({ reducer: (_, v) => v, default: () => [] }),
-  detectedRisks: Annotation<ExtractedRisk[]>({ reducer: (_, v) => v, default: () => [] }),
+  // Single node output
+  analysis: Annotation<StandupAnalysis | null>({ reducer: (_, v) => v, default: () => null }),
 
-  // Progress tracking (for SSE streaming)
+  // Progress + error tracking (for SSE streaming)
   completedNodes: Annotation<string[]>({ reducer: (_, v) => v, default: () => [] }),
   errors: Annotation<Record<string, string>>({ reducer: (_, v) => v, default: () => ({}) }),
 })
@@ -77,20 +54,8 @@ function withProgress(
 
 export function buildStandupGraph() {
   return new StateGraph(StandupAnnotation)
-    .addNode('parse-transcript', withProgress('parse-transcript', parseTranscriptNode))
-    .addNode('infer-attendance', withProgress('infer-attendance', inferAttendanceNode))
-    .addNode('extract-tasks', withProgress('extract-tasks', extractTasksNode))
-    .addNode('match-existing-tasks', withProgress('match-existing-tasks', matchExistingTasksNode))
-    .addNode('resolve-deadlines', withProgress('resolve-deadlines', resolveDeadlinesNode))
-    .addNode('estimate-hours', withProgress('estimate-hours', estimateHoursNode))
-    .addNode('detect-risks', withProgress('detect-risks', detectRisksNode))
-    .addEdge(START, 'parse-transcript')
-    .addEdge('parse-transcript', 'infer-attendance')
-    .addEdge('infer-attendance', 'extract-tasks')
-    .addEdge('extract-tasks', 'match-existing-tasks')
-    .addEdge('match-existing-tasks', 'resolve-deadlines')
-    .addEdge('resolve-deadlines', 'estimate-hours')
-    .addEdge('estimate-hours', 'detect-risks')
-    .addEdge('detect-risks', END)
+    .addNode('analyze-standup', withProgress('analyze-standup', analyzeStandupNode))
+    .addEdge(START, 'analyze-standup')
+    .addEdge('analyze-standup', END)
     .compile()
 }

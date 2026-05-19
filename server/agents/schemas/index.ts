@@ -1,12 +1,29 @@
 import { z } from 'zod'
 
-export const SpeakerSegmentSchema = z.object({
-  speakerLabel: z.string(),
-  matchedResourceId: z.string().nullable(),
-  matchedResourceName: z.string().nullable(),
-  matchConfidence: z.enum(['high', 'medium', 'low']),
-  isClientTeamMember: z.boolean().default(false),
-  text: z.string(),
+const ConfidenceEnum = z.enum(['high', 'medium', 'low'])
+const SeverityEnum = z.enum(['low', 'medium', 'high', 'critical'])
+const RiskCategoryEnum = z.enum([
+  'missed_deadline',
+  'frequent_slippage',
+  'low_attendance',
+  'vague_updates',
+  'blocker_unresolved',
+  'estimate_mismatch',
+  'vague_commitment',
+  'other',
+])
+
+export const TaskClientLinkSchema = z.object({
+  clientMemberName: z.string(),
+  assignmentType: z.enum(['assigned_by', 'mentioned_by', 'reviewing']),
+})
+
+export const AttendanceItemSchema = z.object({
+  resourceId: z.string(),
+  resourceName: z.string(),
+  attended: z.boolean(),
+  confidence: ConfidenceEnum,
+  note: z.string().optional(),
 })
 
 export const ClientTeamMemberItemSchema = z.object({
@@ -14,84 +31,73 @@ export const ClientTeamMemberItemSchema = z.object({
   inferredRole: z.string().nullable(),
 })
 
-export const AttendanceItemSchema = z.object({
-  resourceId: z.string(),
-  resourceName: z.string(),
-  attended: z.boolean(),
-  confidence: z.enum(['high', 'medium', 'low']),
-  note: z.string().optional(),
-})
-
-export const TaskClientLinkSchema = z.object({
-  clientMemberName: z.string(),
-  assignmentType: z.enum(['assigned_by', 'mentioned_by', 'reviewing']),
-})
-
-export const ExtractedTaskItemSchema = z.object({
-  resourceId: z.string(),
-  type: z.enum(['completed', 'committed', 'blocker']),
-  title: z.string(),
-  description: z.string().nullable(),
-  deadlinePhrase: z.string().nullable(),
-  estimatedHours: z.number().nullable(),
-  commitmentConfidence: z.enum(['firm', 'vague', 'aspirational']),
-  isCarriedOver: z.boolean().default(false),
-  rawQuote: z.string().nullable(),
-  clientMemberLinks: z.array(TaskClientLinkSchema).default([]),
-})
-
-export const MatchResultItemSchema = z.object({
-  extractedIndex: z.number(),
-  existingTaskId: z.string().nullable(),
-  isMatch: z.boolean(),
-  matchConfidence: z.enum(['high', 'medium', 'low']),
-  updatedDescription: z.string().nullable(),
-  reasoning: z.string(),
-})
-
-export const DeadlineResolutionSchema = z.object({
-  originalPhrase: z.string(),
-  resolvedDate: z.string().nullable(),
-  isCompletion: z.boolean(),
-  confidence: z.enum(['high', 'medium', 'low']),
-  reasoning: z.string(),
-})
-
-export const HourEstimateSchema = z.object({
-  taskIndex: z.number(),
-  aiEstimatedHoursMin: z.number(),
-  aiEstimatedHoursMax: z.number(),
-  aiEstimateConfidence: z.enum(['low', 'medium', 'high']),
-  aiEstimateReasoning: z.string(),
-})
-
-export const ExtractedRiskSchema = z.object({
-  riskType: z.enum(['project', 'resource']),
-  projectId: z.string().nullable(),
-  resourceId: z.string().nullable(),
-  category: z.enum([
-    'missed_deadline',
-    'frequent_slippage',
-    'low_attendance',
-    'vague_updates',
-    'blocker_unresolved',
-    'estimate_mismatch',
-    'vague_commitment',
-    'other',
-  ]),
-  severity: z.enum(['low', 'medium', 'high', 'critical']),
+// Risk scoped to a specific task — nested inside AnalyzedTask
+export const TaskRiskSchema = z.object({
+  category: RiskCategoryEnum,
+  severity: SeverityEnum,
   title: z.string(),
   description: z.string(),
   aiReasoning: z.string(),
   sourceRawQuote: z.string().nullable(),
 })
 
-export type SpeakerSegment = z.infer<typeof SpeakerSegmentSchema>
-export type ClientTeamMemberItem = z.infer<typeof ClientTeamMemberItemSchema>
-export type AttendanceItem = z.infer<typeof AttendanceItemSchema>
+// Risk at project/resource level — not tied to a specific task (attendance patterns, project-wide issues)
+export const StandaloneRiskSchema = z.object({
+  riskType: z.enum(['project', 'resource']),
+  resourceId: z.string().nullable(),
+  category: RiskCategoryEnum,
+  severity: SeverityEnum,
+  title: z.string(),
+  description: z.string(),
+  aiReasoning: z.string(),
+  sourceRawQuote: z.string().nullable(),
+})
+
+// Core entity: one task with all findings nested inside
+export const AnalyzedTaskSchema = z.object({
+  resourceId: z.string(),
+  type: z.enum(['completed', 'committed', 'blocker']),
+  title: z.string(),
+  description: z.string().nullable(),
+  rawQuote: z.string().nullable(),
+  commitmentConfidence: z.enum(['firm', 'vague', 'aspirational']),
+  isCarriedOver: z.boolean(),
+  clientMemberLinks: z.array(TaskClientLinkSchema),
+
+  // Deadline
+  deadlinePhrase: z.string().nullable(),
+  resolvedDeadline: z.string().nullable(),
+  deadlineIsCompletion: z.boolean(),
+
+  // Hours — resourceEstimatedHours is what the developer explicitly stated
+  resourceEstimatedHours: z.number().nullable(),
+  aiEstimatedHoursMin: z.number().nullable(),
+  aiEstimatedHoursMax: z.number().nullable(),
+  aiEstimateConfidence: z.enum(['low', 'medium', 'high']).nullable(),
+  aiEstimateReasoning: z.string().nullable(),
+
+  // Match to an existing open task
+  existingTaskId: z.string().nullable(),
+  matchConfidence: ConfidenceEnum.nullable(),
+  matchReasoning: z.string().nullable(),
+
+  // Risks that are directly about this task
+  risks: z.array(TaskRiskSchema),
+})
+
+// Top-level output of the single analyze-standup call
+export const StandupAnalysisSchema = z.object({
+  attendance: z.array(AttendanceItemSchema),
+  clientTeamMembers: z.array(ClientTeamMemberItemSchema),
+  tasks: z.array(AnalyzedTaskSchema),
+  // Risks not tied to a specific task: low attendance streaks, project-wide concerns, etc.
+  risks: z.array(StandaloneRiskSchema),
+})
+
 export type TaskClientLink = z.infer<typeof TaskClientLinkSchema>
-export type ExtractedTaskItem = z.infer<typeof ExtractedTaskItemSchema>
-export type MatchResultItem = z.infer<typeof MatchResultItemSchema>
-export type DeadlineResolution = z.infer<typeof DeadlineResolutionSchema>
-export type HourEstimate = z.infer<typeof HourEstimateSchema>
-export type ExtractedRisk = z.infer<typeof ExtractedRiskSchema>
+export type AttendanceItem = z.infer<typeof AttendanceItemSchema>
+export type ClientTeamMemberItem = z.infer<typeof ClientTeamMemberItemSchema>
+export type TaskRisk = z.infer<typeof TaskRiskSchema>
+export type StandaloneRisk = z.infer<typeof StandaloneRiskSchema>
+export type AnalyzedTask = z.infer<typeof AnalyzedTaskSchema>
+export type StandupAnalysis = z.infer<typeof StandupAnalysisSchema>
