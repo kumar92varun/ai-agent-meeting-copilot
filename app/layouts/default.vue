@@ -2,6 +2,7 @@
 const { user } = useUserSession()
 const route = useRoute()
 const authDisabled = useRuntimeConfig().public.authDisabled
+const mobileOpen = ref(false)
 
 const navItems = computed(() => {
   const base = [
@@ -117,6 +118,3 @@ function logout() {
   </div>
 </template>
 
-<script lang="ts">
-export default { setup() { const mobileOpen = ref(false); return { mobileOpen } } }
-</script>
