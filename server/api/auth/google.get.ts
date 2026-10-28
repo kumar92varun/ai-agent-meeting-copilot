@@ -44,7 +44,7 @@ export default defineOAuthGoogleEventHandler({
     }
 
     if (dbUser.role === 'project_member') {
-      return sendRedirect(event, '/login?error=no_access')
+      return sendRedirect(event, withAppBase('/login?error=no_access'))
     }
 
     await setUserSession(event, {
@@ -57,10 +57,10 @@ export default defineOAuthGoogleEventHandler({
       },
     })
 
-    return sendRedirect(event, '/dashboard')
+    return sendRedirect(event, withAppBase('/dashboard'))
   },
   onError(event, error) {
     console.error('Google OAuth error:', error)
-    return sendRedirect(event, '/login?error=oauth_failed')
+    return sendRedirect(event, withAppBase('/login?error=oauth_failed'))
   },
 })

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const { user } = useUserSession()
 const route = useRoute()
+const authDisabled = useRuntimeConfig().public.authDisabled
 
 const navItems = computed(() => {
   const base = [
@@ -17,7 +18,7 @@ const navItems = computed(() => {
 })
 
 function logout() {
-  window.location.href = '/api/auth/logout'
+  window.location.href = appUrl('/api/auth/logout')
 }
 </script>
 
@@ -67,6 +68,7 @@ function logout() {
             <p class="text-xs text-slate-400 truncate capitalize">{{ (user as { role?: string })?.role?.replace('_', ' ') }}</p>
           </div>
           <UButton
+            v-if="!authDisabled"
             icon="i-heroicons-arrow-right-on-rectangle"
             color="gray"
             variant="ghost"

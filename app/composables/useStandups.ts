@@ -25,7 +25,7 @@ export function useStandupAnalyzer() {
     error.value = ''
 
     try {
-      const response = await fetch('/api/standups/analyze', {
+      const response = await fetch(appUrl('/api/standups/analyze'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

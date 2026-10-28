@@ -7,7 +7,7 @@ export function useAuth() {
   )
 
   async function logout() {
-    await $fetch('/api/auth/logout', { method: 'POST' })
+    await $fetch('/api/auth/logout')
     await clear()
     await navigateTo('/login')
   }
