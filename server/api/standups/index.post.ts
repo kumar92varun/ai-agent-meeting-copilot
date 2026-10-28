@@ -26,7 +26,9 @@ export default defineEventHandler(async (event) => {
   const session = await getUserSession(event)
   const user = session.user as { id: string; name?: string }
 
-  const body: SaveStandupRequest = await readBody(event)
+  // The LLM sometimes emits the string "null" instead of null (e.g. resolvedDeadlineDate),
+  // which Postgres rejects for date/uuid columns. Normalize before saving.
+  const body = nullifyStringNulls(await readBody(event)) as SaveStandupRequest
   const db = getDb()
 
   // ── 1. Insert standup record ────────────────────────────────────
@@ -68,6 +70,8 @@ export default defineEventHandler(async (event) => {
 
   // ── 3. Persist attendance ──────────────────────────────────────
   for (const att of body.extraction.attendance) {
+    // Skip people the LLM didn't match to a project resource (it returns a bare name instead of an id)
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(att.resourceId ?? '')) continue
     await db.insert(standupUpdates).values({
       standupId: standup.id,
       resourceId: att.resourceId,
@@ -548,3 +552,12 @@ export default defineEventHandler(async (event) => {
 
   return { id: standup.id }
 })
+
+function nullifyStringNulls(value: unknown): unknown {
+  if (typeof value === 'string') return /^(null|undefined)$/i.test(value.trim()) ? null : value
+  if (Array.isArray(value)) return value.map(nullifyStringNulls)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, nullifyStringNulls(v)]))
+  }
+  return value
+}
