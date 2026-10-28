@@ -1,5 +1,5 @@
 
 export default defineEventHandler(async (event) => {
   await clearUserSession(event)
-  return sendRedirect(event, '/login')
+  return sendRedirect(event, withAppBase('/login'))
 })

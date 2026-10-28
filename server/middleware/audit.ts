@@ -6,7 +6,8 @@ const AUDITED_METHODS = ['POST', 'PATCH', 'PUT', 'DELETE']
 
 export default defineEventHandler(async (event) => {
   const url = getRequestURL(event)
-  if (!url.pathname.startsWith('/api/') || !AUDITED_METHODS.includes(event.method)) return
+  const pathname = stripAppBase(url.pathname)
+  if (!pathname.startsWith('/api/') || !AUDITED_METHODS.includes(event.method)) return
 
   // Run after response
   event.node.res.on('finish', async () => {
@@ -14,7 +15,7 @@ export default defineEventHandler(async (event) => {
       const session = await getUserSession(event).catch(() => null)
       if (!session?.user) return
 
-      const segments = url.pathname.split('/').filter(Boolean)
+      const segments = pathname.split('/').filter(Boolean)
       const entityType = segments[1] || 'unknown'
       const entityId = segments[2] || null
 

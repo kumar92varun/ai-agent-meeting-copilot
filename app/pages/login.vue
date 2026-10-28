@@ -4,7 +4,7 @@ const route = useRoute()
 const error = computed(() => route.query.error as string | undefined)
 
 function signInWithGoogle() {
-  window.location.href = '/api/auth/google'
+  window.location.href = appUrl('/api/auth/google')
 }
 </script>
 

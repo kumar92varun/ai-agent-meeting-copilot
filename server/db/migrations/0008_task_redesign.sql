@@ -8,7 +8,7 @@ TRUNCATE TABLE project_task_client_assignments CASCADE;
 TRUNCATE TABLE project_resource_tasks CASCADE;
 TRUNCATE TABLE project_tasks CASCADE;
 DELETE FROM vector_store WHERE entity_type = 'task';
-DELETE FROM risks; -- risks reference tasks; clear for clean state
+DELETE FROM project_risks; -- risks reference tasks; clear for clean state
 
 -- 2. Drop old enums that are being replaced or renamed
 DROP TYPE IF EXISTS commitment_confidence CASCADE;

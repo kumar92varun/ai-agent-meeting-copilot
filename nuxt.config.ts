@@ -49,6 +49,8 @@ defaultTimezone: process.env.DEFAULT_TIMEZONE || 'Asia/Kolkata',
     public: {
       appUrl: process.env.APP_URL || 'http://localhost:3000',
       allowedEmailDomains: process.env.ALLOWED_EMAIL_DOMAINS || 'crownstack.com',
+      // Open-access mode: no login, every visitor is a shared admin. Override at runtime with NUXT_PUBLIC_AUTH_DISABLED.
+      authDisabled: process.env.AUTH_DISABLED === 'true',
     },
   },
 

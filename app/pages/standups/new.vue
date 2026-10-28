@@ -51,7 +51,7 @@ async function analyze() {
 
   let response: Response
   try {
-    response = await fetch('/api/standups/analyze', {
+    response = await fetch(appUrl('/api/standups/analyze'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...form }),
