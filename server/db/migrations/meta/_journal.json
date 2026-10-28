@@ -57,6 +57,20 @@
       "when": 1747353605000,
       "tag": "0007_fix_standup_intelligence",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1778836385768,
+      "tag": "0008_task_redesign",
+      "breakpoints": false
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778836385769,
+      "tag": "0009_morale_signals",
+      "breakpoints": false
     }
   ]
 }
