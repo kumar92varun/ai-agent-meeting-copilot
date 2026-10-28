@@ -26,10 +26,19 @@ export default defineEventHandler(async (event) => {
   const session = await getUserSession(event)
   const user = session.user as { id: string; name?: string }
 
-  // The LLM sometimes emits the string "null" instead of null (e.g. resolvedDeadlineDate),
-  // which Postgres rejects for date/uuid columns. Normalize before saving.
-  const body = nullifyStringNulls(await readBody(event)) as SaveStandupRequest
   const db = getDb()
+
+  // Clean up LLM output before saving:
+  // - it sometimes emits the string "null" (e.g. resolvedDeadlineDate), which Postgres rejects;
+  // - it sometimes returns a person's uuid with one character wrong, which breaks foreign keys,
+  //   so only ids of real resources are kept.
+  const validResourceIds = new Set(
+    (await db.select({ id: resources.id }).from(resources).where(isNull(resources.deletedAt))).map((r) => r.id)
+  )
+  const body = dropUnknownResourceIds(
+    nullifyStringNulls(await readBody(event)),
+    validResourceIds
+  ) as SaveStandupRequest
 
   // ── 1. Insert standup record ────────────────────────────────────
   const [standup] = await db
@@ -558,6 +567,24 @@ function nullifyStringNulls(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(nullifyStringNulls)
   if (value && typeof value === 'object') {
     return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, nullifyStringNulls(v)]))
+  }
+  return value
+}
+
+function dropUnknownResourceIds(value: unknown, valid: Set<string>): unknown {
+  if (Array.isArray(value)) return value.map((v) => dropUnknownResourceIds(v, valid))
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => {
+        if (k === 'resourceId' || k === 'saidByResourceId') {
+          return [k, typeof v === 'string' && valid.has(v) ? v : null]
+        }
+        if (k === 'additionalAssigneeIds' && Array.isArray(v)) {
+          return [k, v.filter((id) => typeof id === 'string' && valid.has(id))]
+        }
+        return [k, dropUnknownResourceIds(v, valid)]
+      })
+    )
   }
   return value
 }
